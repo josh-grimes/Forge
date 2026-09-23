@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Forge | Workout Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Aldrich&family=Goldman:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="logo-frame"><img class="logo" src="forge-logo.png" alt="Forge logo" /></div>
+      <div class="header-buttons">
+        <button type="button" id="add-new-workout" class="btn primary">+ Workout</button>
+
+        <button type="button" id="open-profile" class="btn secondary"><span class="profile-button-label">Profile</span><span class="profile-avatar-frame"><svg class="profile-avatar-placeholder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg><img id="header-avatar" class="header-avatar" alt="" hidden /></span></button>
+
+        <div class="header-menu-anchor">
+          <button type="button" id="toggle-menu" class="btn secondary" aria-controls="header-menu" aria-expanded="false" aria-label="Menu" title="Menu"><span class="menu-icon" aria-hidden="true"><span></span><span></span><span></span></span></button>
+          <nav id="header-menu" class="header-menu" aria-label="Workout navigation" hidden>
+            <button type="button" id="back-dashboard" class="btn secondary" hidden>Dashboard</button>
+
+            <button type="button" id="export-forge" class="btn secondary">Export Data</button>
+            <button type="button" id="open-calendar" class="btn secondary">Calendar</button>
+            <button type="button" id="open-progress" class="btn secondary">Progress</button>
+            <button type="button" id="open-weight" class="btn secondary">Track Weight</button>
+            <button type="button" id="cancel-workout-edit" class="btn secondary" hidden>Cancel Edit</button>
+          </nav>
+        </div>
+      </div>
+    </header>
+    <main>
+      <section id="today-card" class="card today-card" aria-labelledby="today-heading">
+        <div class="section-heading">
+          <div><p class="eyebrow">YOUR PLAN</p><h1 id="today-heading">Today's Workout</h1></div>
+          <span id="today-date" class="today-date"></span>
+        </div>
+        <div id="today-workouts" aria-live="polite"></div>
+      </section>
+      <section id="profile-card" class="card profile-card" aria-labelledby="profile-heading" hidden>
+        <div class="section-heading"><div><p class="eyebrow">YOUR DETAILS</p><h1 id="profile-heading">Profile</h1></div></div>
+        <div class="profile-photo-controls">
+          <img id="profile-photo-preview" class="profile-photo-preview" alt="Your profile picture" hidden />
+          <label>Profile picture<input id="profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp" /><span>JPG, PNG, or WebP up to 10 MB.</span><span id="photo-save-status" class="save-feedback" role="status">Picture changes save automatically.</span></label>
+          <button type="button" id="remove-profile-photo" class="btn secondary" hidden>Remove picture</button>
+        </div>
+        <form id="profile-form" class="profile-form">
+          <p class="save-feedback">Use Save Profile below to save your details. Your picture saves separately and automatically.</p>
+<fieldset class="profile-group"><legend>Personal details</legend><div class="profile-grid">
+<label>Name<input id="profile-name" type="text" autocomplete="name" placeholder="Your name" /></label>
+<label>Email<input id="profile-email" type="email" autocomplete="email" placeholder="you@example.com" /></label>
+<label>Age<input id="profile-age" type="number" min="0" max="120" step="1" placeholder="Years" /></label>
+<label>Sex<select id="profile-sex">
+              <option value="" disabled>Select sex</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="gorilla">Gorilla</option>
+            </select></label>
+</div></fieldset><fieldset class="profile-group"><legend>Training & goals</legend><div class="profile-grid">
+<label>Fitness goal<select id="profile-fitnessGoal">
+              <option value="">Select a goal</option>
+              <option value="build-muscle">Build muscle</option>
+              <option value="get-stronger">Get stronger</option>
+              <option value="lose-weight">Lose weight</option>
+              <option value="improve-endurance">Improve endurance</option>
+              <option value="stay-active">Stay active</option>
+              <option value="other">Other</option>
+            </select></label>
+<label>Experience level<select id="profile-experienceLevel">
+              <option value="">Select your experience</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select></label>
+<label>Weight (lbs)<input id="profile-weight" type="number" min="0" step="0.1" placeholder="lbs" /></label>
+<label>Target weight (lbs)<input id="profile-targetWeight" type="number" min="0.1" step="0.1" placeholder="lbs" /></label>
+</div></fieldset><details class="profile-records"><summary>Personal records · optional</summary><p class="profile-hint">Enter your best single lift in pounds, or your highest number of reps.</p><div class="profile-grid"><label>Bench press (lbs)<input id="profile-bench" type="number" min="0" step="0.5" placeholder="lbs" /></label>
+<label>Squat (lbs)<input id="profile-squat" type="number" min="0" step="0.5" placeholder="lbs" /></label>
+<label>Deadlift (lbs)<input id="profile-deadlift" type="number" min="0" step="0.5" placeholder="lbs" /></label>
+<label>Push-ups (reps)<input id="profile-pushups" type="number" min="0" step="1" placeholder="reps" /></label>
+<label>Pull-ups (reps)<input id="profile-pullups" type="number" min="0" step="1" placeholder="reps" /></label></div></details>
+          <div class="profile-save-bar"><p id="profile-save-status" class="save-feedback" role="status">No unsaved changes.</p><button class="btn primary" type="submit">Save Profile</button></div>
+        </form>
+      </section>
+      <section id="weight-card" class="card profile-card" aria-labelledby="weight-heading" hidden>
+        <div class="section-heading"><div><p class="eyebrow">YOUR WEIGHT</p><h1 id="weight-heading">Track Weight</h1></div></div>
+        <form id="body-weight-form" class="profile-form">
+          <div class="profile-grid">
+            <label>Date<input id="body-weight-date" type="date" required /></label>
+            <label>Weight (lbs)<input id="body-weight-value" type="number" min="0.1" step="0.1" required placeholder="lbs" /></label>
+          </div>
+          <button type="submit" class="btn primary">Save Weigh-in</button>
+          <p>One entry per day. Saving the same date updates that entry.</p>
+        </form>
+        <p id="body-weight-summary" aria-live="polite"></p>
+        <div id="body-weight-chart" class="progress-chart"></div>
+        <div id="body-weight-history" class="progress-table"></div>
+
+      </section>
+      <section id="progress-card" class="card progress-card" aria-labelledby="progress-heading" hidden>
+        <div class="section-heading"><div><p class="eyebrow">YOUR RESULTS</p><h1 id="progress-heading">Progress</h1></div></div>
+        <div class="progress-controls">
+          <label>Exercise<select id="progress-exercise"></select></label>
+          <label>Measure<select id="progress-metric">
+            <option value="weight">Best weight (lbs)</option>
+            <option value="reps">Best reps in a set</option>
+            <option value="volume">Total volume (lbs)</option>
+          </select></label>
+        </div>
+        <div id="progress-chart" class="progress-chart" role="group" aria-label="Exercise progress chart"></div>
+        <div id="progress-table" class="progress-table"></div>
+        <h2>Exercise History</h2>
+        <div id="exercise-history" class="progress-table"></div>
+      </section>
+      <section id="new-workout-card" class="card" hidden aria-labelledby="new-workout-heading">
+        <div class="section-heading">
+          <h1 id="new-workout-heading">New Workout</h1>
+          <span id="workout-status" class="status">Not Started</span>
+        </div>
+        <div class="workout-info">
+          <label
+            >Workout Name<input
+              id="workout-name"
+              type="text"
+              placeholder="e.g. Push Day"
+              maxlength="100"
+          /></label>
+          <label>Date<input id="workout-date" type="date" /></label>
+        </div>
+        <div id="saved-time-edit" class="saved-time-edit" hidden>
+          <h2>Edit saved workout time</h2>
+          <label>Completed date<select id="edit-time-date"></select></label>
+          <label>Workout time (mm:ss)<input id="edit-saved-time" type="text" inputmode="numeric" pattern="[0-9]+:[0-5][0-9]" placeholder="01:30" /></label>
+          <span>Save Changes to update this date's time.</span>
+        </div>
+        <details id="advanced-schedule" class="advanced-schedule">
+          <summary>Advanced Scheduling</summary>
+          <label class="repeat-toggle"><input id="repeat-enabled" type="checkbox" /> Repeat this workout weekly</label>
+          <div id="repeat-options" hidden>
+            <div class="recurrence-days" id="new-repeat-days" role="group" aria-label="Repeat on weekdays">
+              <label><input type="checkbox" value="0" />Sun</label><label><input type="checkbox" value="1" />Mon</label>
+              <label><input type="checkbox" value="2" />Tue</label><label><input type="checkbox" value="3" />Wed</label>
+              <label><input type="checkbox" value="4" />Thu</label><label><input type="checkbox" value="5" />Fri</label>
+              <label><input type="checkbox" value="6" />Sat</label>
+            </div>
+            <div class="recurrence-dates">
+              <label>Start date<input id="repeat-start" type="date" /></label>
+              <label>End date (optional)<input id="repeat-end" type="date" /></label>
+            </div>
+            <p class="calendar-help">The workout appears on selected days without making copies of the saved workout.</p>
+          </div>
+        </details>
+        <section class="sections-editor" aria-labelledby="sections-editor-heading">
+          <div class="section-heading"><h2 id="sections-editor-heading">Workout Sections</h2></div>
+          <p class="calendar-help">Name each part of your workout. Exercises can be assigned to any section.</p>
+          <div id="section-list"></div>
+          <div class="add-section-controls">
+            <label>New section name<input id="new-section-name" type="text" maxlength="60" placeholder="e.g. Warm Up or Cool Down" /></label>
+            <button id="add-section" type="button" class="btn secondary">+ Add Section</button>
+          </div>
+        </section>
+        <div class="section-heading">
+          <h2>Exercises</h2>
+          <span id="exercise-count">0 exercises</span>
+        </div>
+        <div id="exercise-list" class="exercise-list"></div>
+        <form id="exercise-form" class="exercise-form">
+          <div class="section-heading full">
+            <h2 id="form-title">Add Exercise</h2>
+            <button type="button" id="cancel-edit" class="link-button" hidden>
+              Cancel edit
+            </button>
+          </div>
+          <label class="full">Section<select id="exercise-section"></select></label>
+          <label class="full"
+            >Exercise Name<input
+              id="exercise-name"
+              type="text"
+              placeholder="e.g. Bench Press"
+              required
+              maxlength="100"
+          /></label>
+          <label
+            >Sets<input
+              id="sets"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              placeholder="3"
+              required
+          /></label>
+          <label
+            >Reps<input
+              id="reps"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="10"
+          /></label>
+          <label
+            >Weight (lbs)<input
+              id="weight"
+              type="number"
+              min="0"
+              step="0.5"
+              placeholder="135"
+          /></label>
+          <label
+            >Duration (sec)<input
+              id="duration"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="30"
+          /></label>
+          <button id="submit" type="submit" class="btn primary full">
+            + Add Exercise
+          </button>
+        </form>
+        <div class="workout-commit-actions">
+          <button type="button" id="save-workout" class="btn secondary" hidden>Save Workout</button>
+          <button type="button" id="start-workout" class="btn primary">Start Workout</button>
+        </div>
+      </section>
+      <section id="tracking-card" class="card tracking-card" aria-labelledby="tracking-heading" hidden>
+        <div class="section-heading">
+          <h2 id="tracking-heading">Track Workout</h2>
+          <span id="tracking-date"></span>
+        </div>
+        <div id="session-timer" class="session-timer" role="timer" aria-label="Elapsed workout time">
+          <span id="timer-label">Elapsed</span><strong id="elapsed-time">00:00:00</strong>
+        </div>
+        <div id="timer-edit" class="timer-edit" hidden>
+          <label>Set workout time (mm:ss)<input id="edit-elapsed" type="text" inputmode="numeric" pattern="[0-9]+:[0-5][0-9]" placeholder="01:30" /></label>
+          <button type="button" id="apply-elapsed" class="action-button">Set Time</button>
+          <span class="time-example">01:30 = 1 minute 30 seconds</span>
+        </div>
+        <div class="stopwatch" aria-label="Session stopwatch">
+          <div><span>Stopwatch</span><strong id="stopwatch-time">00:00:00.000</strong></div>
+          <div class="stopwatch-buttons">
+            <button type="button" id="stopwatch-start" class="action-button">Start</button>
+            <button type="button" id="stopwatch-stop" class="action-button" disabled>Stop</button>
+            <button type="button" id="stopwatch-reset" class="action-button">Reset</button>
+          </div>
+          <small>Stopwatch readings are not saved.</small>
+        </div>
+        <p class="tracking-help">Record what you did for each exercise. Leave a field empty if you did not track it.</p>
+        <div id="tracking-list"></div>
+        <button type="button" id="tracking-finish" class="btn primary tracking-finish">Finish Workout</button>
+      </section>
+      <section class="card calendar-card" aria-labelledby="calendar-heading">
+        <div class="section-heading calendar-heading">
+          <h2 id="calendar-heading">Workout Calendar</h2>
+          <div class="calendar-navigation">
+            <button type="button" id="previous-month" class="action-button" aria-label="Previous month">‹</button>
+            <span id="calendar-month" aria-live="polite"></span>
+            <button type="button" id="next-month" class="action-button" aria-label="Next month">›</button>
+          </div>
+        </div>
+        <p id="calendar-help" class="calendar-help">Drag a saved workout onto a date. Click or tap a workout to see its details and controls.</p>
+        <div id="calendar-grid" class="calendar-grid" aria-label="Workout calendar"></div>
+      </section>
+      <div class="dashboard-sidebar">
+      <section id="rest-card" class="card streak-card" aria-labelledby="rest-heading">
+        <div class="section-heading"><h2 id="rest-heading">Streaks</h2></div>
+        <div class="streak-stats">
+          <div><strong id="current-streak">0</strong><span>Current streak</span></div>
+          <div><strong id="best-streak">0</strong><span>Best streak</span></div>
+        </div>
+        <p class="calendar-help">Completed workouts and rest days both keep your streak going.</p>
+      </section>
+      <section class="card history-card" aria-labelledby="history-heading">
+        <div class="section-heading">
+          <h2 id="history-heading">Saved Workouts</h2>
+          <span id="workout-count">0 workouts</span>
+        </div>
+        <div id="saved-view-toggle" class="saved-view-toggle" role="group" aria-label="Saved workout view" hidden>
+          <button id="workout-view-compact" type="button" class="action-button" aria-pressed="false">Compact</button>
+          <button id="workout-view-detailed" type="button" class="action-button" aria-pressed="true">Detailed</button>
+        </div>
+        <div id="workout-history" class="workout-history"></div>
+      </section>
+      </div>
+    </main>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
