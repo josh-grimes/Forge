@@ -176,6 +176,7 @@ main > [hidden] {
   background: var(--background);
   border-radius: 6px;
   font-size: 0.8rem;
+  margin-bottom: 15px;
 }
 .last-set {
   margin: 0 0 10px;

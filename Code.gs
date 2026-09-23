@@ -8,7 +8,13 @@ const CHUNK_SIZE = 30000;
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Forge Workout Tracker')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+    .setFaviconUrl(
+      'https://raw.githubusercontent.com/josh-grimes/Forge/main/Local-Forge-Export/forge-icon.png'
+    )
+    .addMetaTag(
+      'viewport',
+      'width=device-width, initial-scale=1, viewport-fit=cover'
+    );
 }
 
 function forgeSheet_() {
