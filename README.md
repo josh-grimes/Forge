@@ -1,66 +1,45 @@
 # Forge Workout Tracker
 
-Forge is organized into two independent app targets:
+Forge is a static web app backed by Supabase. Google Apps Script and Google Sheets are not used.
+
+## Repository layout
 
 ```text
 Forge/
-├── README.md
-├── local/
-│   ├── index.html
-│   ├── script.js
-│   ├── style.css
-│   ├── exercise.js
-│   ├── forge-logo.png
-│   └── forge-icon.png
-└── google-apps-script/
-    ├── Code.gs
-    ├── Index.html
-    └── exercise.html
+├── index.html                         # Current Forge app
+├── supabase-config.js                 # Browser-safe Supabase connection values
+├── supabase/
+│   └── migrations/                    # Database schema and RLS policies
+└── local/
+    ├── forge-logo.png
+    ├── forge-icon.png
+    └── ...                            # Previous local-only build and source assets
 ```
 
-## Local version
+## Supabase setup
 
-Open `local/index.html` in a browser. Keep every file in the `local` folder together. Local data is stored in that browser's local storage.
+1. Apply `supabase/migrations/202609250001_create_forge_user_state.sql` to the connected Supabase project. The Supabase GitHub integration can apply it through its normal migration workflow, or it can be pasted into the Supabase SQL editor once.
+2. In Supabase, keep the Email authentication provider enabled.
+3. Add the deployed Forge URL to **Authentication → URL Configuration → Redirect URLs**. Magic-link sign-in returns users to this URL.
+4. Open `supabase-config.js` and replace the two placeholders with the project's URL and publishable key from **Project Settings → API**.
+5. Host the repository root with any static host, such as GitHub Pages. `index.html` is the app entry point.
 
-## Google Apps Script version
+The publishable key is intended for browser use. User data is protected by the Row Level Security policies in the migration; never put a Supabase service-role key in this repository.
 
-Copy the three files in `google-apps-script` into an Apps Script project:
+## Data behavior
 
-1. Replace `Code.gs`.
-2. Add an HTML file named `Index` and paste `Index.html`.
-3. Add an HTML file named `exercise` and paste `exercise.html`.
-4. Deploy the project as a web app.
-
-`Code.gs` is the Sheet-backed storage layer. If you use a different Sheet, replace
-`SPREADSHEET_ID` in that file before deploying. The Apps Script `Index.html` is
-self-contained, so it does not need separate CSS, JavaScript, or image files.
-
-The Google Apps Script build stores Forge state, goals, profile/weight data, and
-personal-record history in the connected Google Sheet. It also maintains readable
-`Workout Log` and `Rest Days` tabs. After changing these files, deploy a new
-web-app version.
+- Forge remains usable from browser storage while signed out or temporarily offline.
+- Selecting the sync status in the header sends an email magic link for sign-in.
+- The first sign-in uploads existing browser data when the account has no cloud state.
+- Workouts, schedules, results, profile and weight data, goals, personal records, templates, drafts, favorites, and recents are included in cloud sync and exports.
+- Saves use optimistic version checks so one device cannot silently overwrite a newer save from another device.
 
 ## Included features
 
 - Workout planning, scheduling, repeats, and calendar tracking
-- Independently choose Sets or Rounds for every workout section
-- Rounds sections show a section-level round quantity and never request per-exercise sets
-- Sets sections request the number of sets for each exercise
-- Workout overview screen before timers and tracking begin
-- Guided builder with a visual Details → Build → Review progress indicator
-- Forge Workout start chooser for blank workouts, drafts, and templates
-- Dedicated Templates screen for saved workout templates
-- Autosaved builder drafts that can be resumed separately from completed workouts
-- Separate workout Preview action
-- Guided Back navigation that undoes recent exercise or section additions
-- Start chooser displayed in the same editor layout as the workout builder
-- Continuous exercise entry without a repetitive Add Another Exercise action
-- Simple prescription editing with a selector for Reps, Duration, Distance, or Calories
-- Only the selected prescription value field is shown while Weight and Rest remain available
-- Chunk 6 polish: selector changes update validation and estimates immediately, with responsive controls and reduced-motion support
-- Rest timer and workout stopwatch
-- Per-workout and per-session notes
-- Three measurable goals with progress bars
+- Sets and rounds workout sections
+- Guided workout builder, drafts, and templates
 - Exercise library and custom exercises
-- Set-by-set results, personal records, progress charts, weight tracking, and streaks
-- Local backup/export and Google Sheets persistence
+- Timers, per-set results, notes, and completed sessions
+- Goals, personal records, progress charts, weight tracking, and streaks
+- Local JSON backup/export and authenticated Supabase synchronization
