@@ -41,6 +41,7 @@ const WORKOUT_TEMPLATES_KEY = "forge-workout-templates";
 const SECTION_TEMPLATES_KEY = "forge-section-templates";
 const WORKOUT_DRAFT_KEY = "forge-workout-draft";
 const GOALS_KEY = "forge-goals";
+const PR_HISTORY_KEY = "forge-pr-history";
 const REST_DRAG_ID = "__forge_rest_day__";
 
 let exercises = [];
@@ -73,6 +74,7 @@ let calendarOpen = false;
 let progressOpen = false;
 let goalsOpen = false;
 let goalStatus = "active";
+let progressRange = 30;
 let weightOpen = false;
 let savedView = "detailed";
 let restDays = [];
@@ -1361,20 +1363,12 @@ function entryMetrics(entry) {
     if (set?.distance !== undefined && set?.distance !== "" && Number.isFinite(miles)) distance = Math.max(distance ?? miles, miles);
   }
   const setCount = sets.filter(set => set && Object.values(set).some(value => value !== "" && value !== null && value !== undefined)).length || sets.length;
-  return { weight, reps, volume, sets: setCount, rounds: Number(entry.rounds) || setCount, duration, distance };
+  const fastestDuration = sets.map(set => Number(set?.duration)).filter(value => Number.isFinite(value) && value > 0).reduce((best, value) => Math.min(best, value), null);
+  return { weight, reps, volume, sets: setCount, rounds: Number(entry.rounds) || setCount, duration, fastestDuration, distance };
 }
 
 function personalRecordsForEntry(name, date, entry) {
-  if (!name || !entry) return [];
-  const current = entryMetrics(entry);
-  const earlier = exerciseRecords(name, date).map((record) => entryMetrics(record.entry));
-  const labels = [];
-  for (const [key, label] of [["weight", "Weight PR"], ["reps", "Rep PR"]]) {
-    if (current[key] === null) continue;
-    const prior = earlier.map((record) => record[key]).filter((value) => value !== null);
-    if (!prior.length || current[key] > Math.max(...prior)) labels.push(label);
-  }
-  return labels;
+  return personalRecordDetails(name, date, entry).map(detail => `${detail.label} PR`);
 }
 
 function progressPoints(name, metric) {
@@ -1396,6 +1390,211 @@ function progressUnit(metric) {
 }
 function formatProgressValue(value, metric) {
   return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 })}${progressUnit(metric) ? ` ${progressUnit(metric)}` : ""}`;
+}
+function progressDateWindow(days, end = todayLocal()) {
+  if (days === "all") return "0000-00-00";
+  const date = new Date(`${end}T12:00:00`); date.setDate(date.getDate() - Number(days) + 1);
+  return date.toISOString().slice(0, 10);
+}
+function dashboardRecords(startDate, endDate = todayLocal()) {
+  const records = [];
+  savedWorkouts.forEach(workout => Object.entries(workout.actualLogs || {}).forEach(([date, entries]) => {
+    if (date < startDate || date > endDate || !Array.isArray(entries)) return;
+    entries.forEach((entry, index) => {
+      const exercise = workout.loggedExercisesByDate?.[date]?.[index] || workout.exercises?.[index];
+      if (entry && exercise) records.push({ date, entry, exercise, workout, elapsed: Number(workout.elapsedByDate?.[date]) || 0 });
+    });
+  }));
+  return records;
+}
+function dashboardAggregate(startDate, endDate = todayLocal()) {
+  const records = dashboardRecords(startDate, endDate);
+  const dates = new Set(records.map(record => record.date));
+  const workouts = new Set(records.map(record => `${record.workout.id}:${record.date}`));
+  const volume = records.reduce((total, record) => total + (entryMetrics(record.entry).volume || 0), 0);
+  const time = [...workouts].reduce((total, key) => { const [id, date] = key.split(":"); const workout = savedWorkouts.find(item => item.id === id); return total + (Number(workout?.elapsedByDate?.[date]) || 0); }, 0);
+  const names = [...new Set(records.map(record => record.exercise.name))];
+  let improved = 0;
+  names.forEach(name => {
+    const entries = records.filter(record => record.exercise.name === name).sort((a, b) => a.date.localeCompare(b.date));
+    if (entries.length > 1) {
+      const first = entryMetrics(entries[0].entry), last = entryMetrics(entries.at(-1).entry);
+      if ((last.weight ?? -Infinity) > (first.weight ?? -Infinity) || (last.volume ?? -Infinity) > (first.volume ?? -Infinity) || (last.reps ?? -Infinity) > (first.reps ?? -Infinity)) improved++;
+    }
+  });
+  return { records, dates, workouts, volume, time, improved };
+}
+function formatDashboardTime(seconds) {
+  const minutes = Math.round(seconds / 60);
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`;
+}
+function dateRangeList(startDate, endDate = todayLocal(), maxDays = 365) {
+  const end = new Date(`${endDate}T12:00:00`), start = new Date(`${startDate}T12:00:00`);
+  if (startDate === "0000-00-00" || Number.isNaN(start.getTime())) start.setTime(end.getTime() - (maxDays - 1) * 86400000);
+  const days = [];
+  for (const cursor = new Date(start); cursor <= end && days.length < maxDays; cursor.setDate(cursor.getDate() + 1)) days.push(cursor.toISOString().slice(0, 10));
+  return days;
+}
+function consistencyStats(startDate, endDate = todayLocal()) {
+  const planned = new Set(), completed = new Set();
+  savedWorkouts.forEach(workout => {
+    scheduledDates(workout).filter(date => date >= startDate && date <= endDate).forEach(date => planned.add(`${workout.id}:${date}`));
+    completedDates(workout).filter(date => date >= startDate && date <= endDate).forEach(date => completed.add(`${workout.id}:${date}`));
+  });
+  const completedDays = new Set([...completed].map(key => key.split(":").at(-1)));
+  const days = dateRangeList(startDate, endDate, 730);
+  let current = 0, best = 0, run = 0;
+  days.slice().reverse().forEach(date => { if (completedDays.has(date)) { run++; best = Math.max(best, run); } else if (run) run = 0; });
+  for (const date of days.slice().reverse()) { if (!completedDays.has(date)) break; current++; }
+  return { planned, completed, completedDays, current, best, days };
+}
+function renderProgressConsistency(startDate) {
+  const end = todayLocal(), stats = consistencyStats(startDate, end), box = $("progress-consistency");
+  box.replaceChildren();
+  const plannedCount = stats.planned.size, completedCount = stats.completed.size;
+  const cards = [[`${completedCount} / ${plannedCount || 0}`, "Planned vs completed"], [completedCount ? (completedCount / Math.max(1, (stats.days.length / 7))).toFixed(1) : "0", "Workouts / week"], [stats.current, "Current streak"], [stats.best, "Best streak"]];
+  cards.forEach(([value, label]) => { const card = element("div", "consistency-card"); card.append(element("strong", "", String(value)), element("span", "", label)); box.append(card); });
+  const heatmap = $("progress-heatmap"); heatmap.replaceChildren();
+  stats.days.slice(-Math.min(365, stats.days.length)).forEach(date => { const planned = [...stats.planned].some(key => key.endsWith(`:${date}`)); const complete = stats.completedDays.has(date); const cell = element("span", `heatmap-day${planned ? " is-planned" : ""}${complete ? " is-complete" : ""}`); cell.title = `${date} · ${complete ? "Completed" : planned ? "Planned" : "No workout"}`; cell.setAttribute("aria-label", cell.title); heatmap.append(cell); });
+}
+function renderProgressComparisons(startDate) {
+  const box = $("progress-comparisons"); box.replaceChildren();
+  const records = dashboardRecords(startDate), byName = new Map();
+  records.forEach(record => { if (!byName.has(record.exercise.name)) byName.set(record.exercise.name, []); byName.get(record.exercise.name).push(record); });
+  const comparisons = [...byName].map(([name, entries]) => {
+    entries.sort((a, b) => a.date.localeCompare(b.date)); const first = entryMetrics(entries[0].entry), last = entryMetrics(entries.at(-1).entry);
+    const metric = ["weight", "reps", "distance", "duration", "volume"].find(key => first[key] !== null && last[key] !== null);
+    return metric && entries.length > 1 ? { name, metric, first: first[metric], last: last[metric], firstDate: entries[0].date, lastDate: entries.at(-1).date } : null;
+  }).filter(Boolean).sort((a, b) => (b.last - b.first) - (a.last - a.first)).slice(0, 8);
+  if (!comparisons.length) { box.append(element("div", "dashboard-list-empty", "Log an exercise more than once to see progress since the selected date.")); return; }
+  comparisons.forEach(item => { const card = element("article", "comparison-card"); const delta = item.last - item.first; card.append(element("strong", "", item.name), element("span", "", `${formatProgressValue(item.first, item.metric)} → ${formatProgressValue(item.last, item.metric)} (${delta >= 0 ? "+" : ""}${formatProgressValue(delta, item.metric)})`), element("span", "", `${item.firstDate} → ${item.lastDate}`)); box.append(card); });
+}
+function reportStats(startDate, endDate = todayLocal()) {
+  const aggregate = dashboardAggregate(startDate, endDate), records = aggregate.records;
+  const workouts = aggregate.workouts.size, sets = records.reduce((total, record) => total + (entryMetrics(record.entry).sets || 0), 0);
+  const prs = readPRHistory().filter(record => record.date >= startDate && record.date <= endDate);
+  const goals = syncGoalsFromWorkouts().filter(goal => goal.status !== "archived");
+  return { ...aggregate, workouts, sets, prs, goals, progressingGoals: goals.filter(goal => Number(goal.current) > 0).length };
+}
+function renderReport(container, stats, previous, label) {
+  container.replaceChildren();
+  const lines = [["Period", label], ["Workouts completed", stats.workouts], ["Training time", formatDashboardTime(stats.time)], ["Sets", stats.sets], ["Volume", `${Math.round(stats.volume).toLocaleString()} lbs`], ["PRs", stats.prs.length], ["Goal movement", `${stats.progressingGoals} active goals progressing`]];
+  if (previous) lines.push(["Compared with previous", `${stats.workouts - previous.workouts >= 0 ? "+" : ""}${stats.workouts - previous.workouts} workouts · ${stats.prs.length - previous.prs.length >= 0 ? "+" : ""}${stats.prs.length - previous.prs.length} PRs`]);
+  lines.forEach(([name, value]) => { const row = element("div", "report-line"); row.append(element("span", "", name), element("strong", "", String(value))); container.append(row); });
+}
+function renderReportsAndScorecard() {
+  const today = new Date(`${todayLocal()}T12:00:00`), weekStart = new Date(today), weekday = today.getDay(); weekStart.setDate(today.getDate() - (weekday === 0 ? 6 : weekday - 1));
+  const priorWeekEnd = new Date(weekStart); priorWeekEnd.setDate(priorWeekEnd.getDate() - 1); const priorWeekStart = new Date(priorWeekEnd); priorWeekStart.setDate(priorWeekEnd.getDate() - 6);
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 12); const priorMonthEnd = new Date(monthStart); priorMonthEnd.setDate(priorMonthEnd.getDate() - 1); const priorMonthStart = new Date(priorMonthEnd.getFullYear(), priorMonthEnd.getMonth(), 1, 12);
+  const week = reportStats(weekStart.toISOString().slice(0, 10)), priorWeek = reportStats(priorWeekStart.toISOString().slice(0, 10), priorWeekEnd.toISOString().slice(0, 10));
+  const month = reportStats(monthStart.toISOString().slice(0, 10)), priorMonth = reportStats(priorMonthStart.toISOString().slice(0, 10), priorMonthEnd.toISOString().slice(0, 10));
+  renderReport($("weekly-report"), week, priorWeek, `${weekStart.toISOString().slice(0, 10)} → ${todayLocal()}`);
+  renderReport($("monthly-report"), month, priorMonth, `${monthStart.toLocaleString(undefined, { month: "long" })} ${monthStart.getFullYear()}`);
+  const scorecard = $("forge-scorecard"); scorecard.replaceChildren();
+  const consistency = consistencyStats(weekStart.toISOString().slice(0, 10));
+  const current30Start = progressDateWindow(30), prior30EndDate = new Date(`${current30Start}T12:00:00`); prior30EndDate.setDate(prior30EndDate.getDate() - 1);
+  const prior30End = prior30EndDate.toISOString().slice(0, 10), previous30Start = progressDateWindow(30, prior30End);
+  const current30 = dashboardAggregate(current30Start), prior30 = dashboardAggregate(previous30Start, prior30End);
+  const volumeDelta = prior30.volume ? Math.round((current30.volume - prior30.volume) / prior30.volume * 100) : 0;
+  [[`${consistency.completed.size} / ${consistency.planned.size || 0}`, "Consistency"], [`${current30.improved} exercises`, "Strength"], [`${volumeDelta >= 0 ? "+" : ""}${volumeDelta}%`, "Work capacity"], [`${month.progressingGoals} active goals`, "Goal progress"]].forEach(([value, label]) => { const item = element("article", "scorecard-item"); item.append(element("strong", "", value), element("span", "", label)); scorecard.append(item); });
+}
+function renderProgressDashboard() {
+  const start = progressDateWindow(progressRange), current = dashboardAggregate(start), overview = $("progress-overview");
+  overview.replaceChildren();
+  const weekStartDate = new Date(`${todayLocal()}T12:00:00`); const day = weekStartDate.getDay(); weekStartDate.setDate(weekStartDate.getDate() - (day === 0 ? 6 : day - 1));
+  const week = dashboardAggregate(weekStartDate.toISOString().slice(0, 10));
+  [[week.workouts.size, "Workouts this week"], [formatDashboardTime(current.time), "Training time"], [current.volume ? `${Math.round(current.volume).toLocaleString()} lbs` : "0 lbs", "Volume"], [readPRHistory().filter(record => record.date >= start).length, "PRs"], [current.improved, "Exercises improved"]].forEach(([value, label]) => { const card = element("div", "progress-overview-card"); card.append(element("strong", "", String(value)), element("span", "", label)); overview.append(card); });
+  const goals = $("progress-goals"); goals.replaceChildren();
+  const activeGoals = syncGoalsFromWorkouts().filter(goal => goal.status !== "archived");
+  if (!activeGoals.length) goals.append(element("div", "dashboard-list-empty", "Create a goal to see it here."));
+  activeGoals.slice(0, 5).forEach(goal => { const percent = Math.min(100, Math.round(Number(goal.current) / Number(goal.target) * 100)); const item = element("article", "dashboard-goal"); const heading = element("div", "dashboard-goal-heading"); heading.append(element("strong", "", goal.name), element("span", "", `${percent}%`)); const bar = element("div", "dashboard-goal-bar"); const fill = element("span"); fill.style.width = `${percent}%`; bar.append(fill); item.append(heading, bar); goals.append(item); });
+  const prs = $("progress-prs"); prs.replaceChildren();
+  const prRecords = readPRHistory().filter(record => record.date >= start).slice().reverse().slice(0, 5);
+  if (!prRecords.length) prs.append(element("div", "dashboard-list-empty", "No personal records in this period."));
+  prRecords.forEach(record => { const item = element("article", "dashboard-pr"); item.append(element("strong", "", record.exerciseName), element("small", "", `${record.label} · ${Number(record.value).toFixed(1).replace(/\.0$/, "")} ${record.unit || ""}`)); prs.append(item); });
+  const trends = $("progress-trends"); trends.replaceChildren();
+  const previousEndDate = progressRange === "all" ? null : new Date(`${start}T12:00:00`);
+  if (previousEndDate) previousEndDate.setDate(previousEndDate.getDate() - 1);
+  const previousEnd = previousEndDate?.toISOString().slice(0, 10);
+  const previousStart = previousEnd ? progressDateWindow(progressRange, previousEnd) : null;
+  const previous = previousStart ? dashboardAggregate(previousStart, previousEnd) : null;
+  [["Strength", current.improved, previous?.improved], ["Volume", current.volume, previous?.volume], ["Workout frequency", current.workouts.size, previous?.workouts.size], ["Training time", current.time, previous?.time]].forEach(([label, value, prior]) => { const item = element("div", "progress-trend"); const delta = prior === null || prior === undefined ? "No comparison yet" : `${value >= prior ? "+" : ""}${Math.round(value - prior)} vs previous`; item.append(element("strong", "", label === "Volume" ? `${Math.round(value).toLocaleString()} lbs` : label === "Training time" ? formatDashboardTime(value) : String(value)), element("span", "", delta)); trends.append(item); });
+  renderProgressConsistency(start);
+  renderProgressComparisons(start);
+  renderReportsAndScorecard();
+}
+function readPRHistory() {
+  try { const stored = JSON.parse(localStorage.getItem(PR_HISTORY_KEY) || "[]"); return Array.isArray(stored) ? stored : []; }
+  catch (error) { return []; }
+}
+function writePRHistory(records) {
+  try { localStorage.setItem(PR_HISTORY_KEY, JSON.stringify(records.slice(-500))); return true; }
+  catch (error) { return false; }
+}
+function estimatedOneRepMax(weight, reps) {
+  return Number(weight) > 0 && Number(reps) > 0 ? Number(weight) * (1 + Number(reps) / 30) : null;
+}
+function prCandidates(entry) {
+  const sets = Array.isArray(entry?.setsDetail) ? entry.setsDetail : [entry || {}];
+  const metrics = entryMetrics(entry);
+  const estimated = sets.map(set => estimatedOneRepMax(set.weight, set.reps)).filter(Boolean);
+  const fastest = metrics.fastestDuration;
+  const atWeight = sets.filter(set => set?.weight !== undefined && set?.weight !== "" && set?.reps !== undefined && set?.reps !== "").map(set => ({ weight: Number(set.weight), reps: Number(set.reps) })).filter(item => Number.isFinite(item.weight) && Number.isFinite(item.reps));
+  return { metrics, estimatedOneRepMax: estimated.length ? Math.max(...estimated) : null, fastestDuration: fastest, repsAtWeight: atWeight };
+}
+function personalRecordDetails(name, date, entry) {
+  if (!name || !entry) return [];
+  const current = prCandidates(entry);
+  const earlier = exerciseRecords(name, date).map(record => prCandidates(record.entry));
+  const details = [];
+  const priorMax = key => earlier.map(item => item.metrics[key]).filter(value => value !== null && value !== undefined);
+  const add = (label, value, unit) => details.push({ label, value, unit });
+  const bestWeight = current.metrics.weight, priorWeight = priorMax("weight");
+  if (bestWeight !== null && (!priorWeight.length || bestWeight > Math.max(...priorWeight))) add("Heaviest weight", bestWeight, "lbs");
+  const bestReps = current.metrics.reps, priorReps = priorMax("reps");
+  if (bestReps !== null && (!priorReps.length || bestReps > Math.max(...priorReps))) add("Most reps", bestReps, "reps");
+  current.repsAtWeight.forEach(item => {
+    const priorAtWeight = earlier.flatMap(record => record.repsAtWeight.filter(other => other.weight === item.weight).map(other => other.reps));
+    if (!priorAtWeight.length || item.reps > Math.max(...priorAtWeight)) add(`Most reps at ${item.weight} lbs`, item.reps, "reps");
+  });
+  if (current.estimatedOneRepMax !== null) {
+    const prior = earlier.map(item => item.estimatedOneRepMax).filter(Boolean);
+    if (!prior.length || current.estimatedOneRepMax > Math.max(...prior)) add("Estimated 1RM", current.estimatedOneRepMax, "lbs");
+  }
+  const bestVolume = current.metrics.volume, priorVolume = priorMax("volume");
+  if (bestVolume !== null && (!priorVolume.length || bestVolume > Math.max(...priorVolume))) add("Highest volume", bestVolume, "lbs");
+  if (current.fastestDuration !== null) {
+    const prior = earlier.map(item => item.fastestDuration).filter(Boolean);
+    if (!prior.length || current.fastestDuration < Math.min(...prior)) add("Fastest time", current.fastestDuration, "sec");
+  }
+  const bestDuration = current.metrics.duration, priorDuration = priorMax("duration");
+  if (bestDuration !== null && (!priorDuration.length || bestDuration > Math.max(...priorDuration))) add("Longest duration", bestDuration, "sec");
+  const bestDistance = current.metrics.distance, priorDistance = priorMax("distance");
+  if (bestDistance !== null && (!priorDistance.length || bestDistance > Math.max(...priorDistance))) add("Longest distance", bestDistance, "mi");
+  const bestRounds = current.metrics.rounds, priorRounds = priorMax("rounds");
+  if (bestRounds !== null && (!priorRounds.length || bestRounds > Math.max(...priorRounds))) add("Most rounds", bestRounds, "rounds");
+  return details;
+}
+function recordPersonalRecords(workout, date, actuals, exercises = workout.exercises || []) {
+  const records = readPRHistory().filter(record => !(record.date === date && record.workoutName === (workout.name || "Workout")));
+  (actuals || []).forEach((entry, index) => {
+    const exercise = exercises[index];
+    personalRecordDetails(exercise?.name, date, entry).forEach(detail => records.push({ ...detail, exerciseName: exercise.name, workoutName: workout.name || "Workout", date }));
+  });
+  writePRHistory(records);
+}
+function backfillPRHistory() {
+  if (readPRHistory().length) return;
+  const records = [];
+  savedWorkouts.slice().sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(workout => {
+    Object.entries(workout.actualLogs || {}).sort(([a], [b]) => a.localeCompare(b)).forEach(([date, actuals]) => {
+      (actuals || []).forEach((entry, index) => {
+        const exercise = workout.loggedExercisesByDate?.[date]?.[index] || workout.exercises?.[index];
+        personalRecordDetails(exercise?.name, date, entry).forEach(detail => records.push({ ...detail, exerciseName: exercise.name, workoutName: workout.name || "Workout", date }));
+      });
+    });
+  });
+  writePRHistory(records);
 }
 function buildExerciseProgressRecords(workout, date, actuals) {
   return (Array.isArray(actuals) ? actuals : []).map((entry, index) => {
@@ -1442,6 +1641,8 @@ function attachGraphPointLabel(svg, dot, label) {
 
 function graphWidth() { return Math.max(240, Math.min(760, window.innerWidth - 72)); }
 function renderProgress() {
+  backfillPRHistory();
+  renderProgressDashboard();
   const exerciseSelect = $("progress-exercise");
   const names = [...new Set(savedWorkouts.flatMap((workout) =>
     Object.entries(workout.actualLogs ?? {}).flatMap(([date, entries]) =>
@@ -1453,6 +1654,8 @@ function renderProgress() {
   names.forEach((name) => { const option = element("option", "", name); option.value = name; exerciseSelect.append(option); });
   if (names.includes(selected)) exerciseSelect.value = selected;
   renderExerciseHistory(exerciseSelect.value);
+  backfillPRHistory();
+  renderPRHistory(exerciseSelect.value);
   const chart = $("progress-chart"), table = $("progress-table");
   chart.replaceChildren(); table.replaceChildren();
   const summary = $("progress-summary"); summary.replaceChildren();
@@ -1512,6 +1715,17 @@ function renderProgress() {
     table.append(row);
   }
 }
+function renderPRHistory(name) {
+  const list = $("pr-history");
+  list.replaceChildren();
+  const records = readPRHistory().filter(record => !name || record.exerciseName === name).slice().reverse().slice(0, 20);
+  if (!records.length) { list.append(element("p", "", "No personal records yet. Keep logging workouts to start building your PR history.")); return; }
+  records.forEach(record => {
+    const row = element("article", "pr-history-entry");
+    row.append(element("strong", "", `${record.exerciseName} · ${record.label}`), element("span", "", `${Number(record.value).toFixed(1).replace(/\.0$/, "")} ${record.unit || ""}`), element("small", "", `${record.date} · ${record.workoutName}`));
+    list.append(row);
+  });
+}
 $("progress-exercise").addEventListener("change", renderProgress);
 $("progress-metric").addEventListener("change", () => {
   document.querySelectorAll("[data-progress-metric]").forEach(item => item.classList.toggle("is-active", item.dataset.progressMetric === $("progress-metric").value));
@@ -1521,6 +1735,11 @@ document.querySelectorAll("[data-progress-metric]").forEach(button => button.add
   $("progress-metric").value = button.dataset.progressMetric;
   document.querySelectorAll("[data-progress-metric]").forEach(item => item.classList.toggle("is-active", item === button));
   renderProgress();
+}));
+document.querySelectorAll("[data-progress-range]").forEach(button => button.addEventListener("click", () => {
+  progressRange = button.dataset.progressRange === "all" ? "all" : Number(button.dataset.progressRange);
+  document.querySelectorAll("[data-progress-range]").forEach(item => item.classList.toggle("is-active", item === button));
+  renderProgressDashboard();
 }));
 
 function renderWorkoutOverview(exerciseList, date, sectionDefs, workoutName) {
@@ -1724,6 +1943,14 @@ function renderPlayerRest() {
   controls.append(back, skip); card.append(controls); trackingList.append(card);
 }
 
+function updateLivePRAlert(container, exercise, entry) {
+  let alert = container.querySelector(".pr-alert");
+  const details = personalRecordDetails(exercise?.name, session?.date, { setsDetail: [entry] });
+  if (!details.length) { alert?.remove(); return; }
+  if (!alert) { alert = element("div", "pr-alert"); container.prepend(alert); }
+  alert.replaceChildren(element("strong", "", "🏆 NEW PR"), element("span", "", `${exercise.name} · ${details.map(detail => `${detail.label}: ${Number(detail.value).toFixed(1).replace(/\.0$/, "")} ${detail.unit || ""}`).join(" · ")}`));
+}
+
 function renderPlayerStep() {
   if (!session?.player) return;
   const player = session.player;
@@ -1779,11 +2006,12 @@ function renderPlayerStep() {
     if (!planned && !config?.[key] && !current[key]) continue;
     const wrapper = element("label", "", label);
     const input = element("input"); input.type = "number"; input.min = "0"; input.step = stepSize; input.placeholder = planned ? String(planned) : "—"; input.value = current[key] ?? "";
-    input.addEventListener("input", () => { current[key] = input.value; });
+    input.addEventListener("input", () => { current[key] = input.value; updateLivePRAlert(card, step.exercise, current); });
     wrapper.append(input); fields.append(wrapper);
   }
   if (!fields.children.length) fields.append(element("p", "tracking-help", "No result fields required for this exercise."));
   card.append(fields);
+  updateLivePRAlert(card, step.exercise, current);
   const nav = element("div", "player-navigation");
   const back = element("button", "btn secondary", "Back"); back.type = "button"; back.disabled = player.index === 0; back.addEventListener("click", () => { clearPlayerPhaseTimer(); player.index--; renderPlayerStep(); });
   const next = element("button", "btn primary", player.index === player.steps.length - 1 ? "Review Workout" : "Next →"); next.type = "button"; next.addEventListener("click", advancePlayer);
@@ -1833,6 +2061,40 @@ function endPlayerEarly() {
   renderPlayerRecap();
 }
 
+function renderCompletionInsights(summary, exerciseList, actuals, date) {
+  const stats = actuals.map((entry, index) => ({ entry, exercise: exerciseList[index] })).filter(item => item.entry && item.exercise);
+  const improved = [], prs = [];
+  stats.forEach(({ entry, exercise }) => {
+    const current = entryMetrics(entry);
+    const previous = exerciseRecords(exercise.name, date).at(-1);
+    if (previous) {
+      const prior = entryMetrics(previous.entry);
+      const comparisonMetric = ["weight", "reps", "volume", "duration", "distance"].find(key => current[key] !== null && current[key] > (prior[key] ?? -Infinity));
+      if (comparisonMetric) improved.push(`${exercise.name}: ${formatProgressValue(prior[comparisonMetric], comparisonMetric)} → ${formatProgressValue(current[comparisonMetric], comparisonMetric)}`);
+    }
+    personalRecordDetails(exercise.name, date, entry).forEach(detail => prs.push(`${exercise.name}: ${detail.label}`));
+  });
+  const insights = element("div", "completion-insights");
+  const addSection = (title, values, empty) => {
+    const block = element("section", "completion-insight");
+    block.append(element("h3", "", title));
+    block.append(values.length ? element("p", "", values.join(" · ")) : element("p", "muted", empty));
+    insights.append(block);
+  };
+  addSection("New PRs", [...new Set(prs)], "No new personal records this time.");
+  addSection("Exercises improved", [...new Set(improved)], "No previous performance to compare yet.");
+  const goals = syncGoalsFromWorkouts().filter(goal => goal.status !== "archived" && goal.exerciseName);
+  const goalMovement = goals.map(goal => {
+    const entry = stats.find(item => item.exercise.name === goal.exerciseName);
+    if (!entry) return null;
+    const metric = goal.metric || "weight";
+    const value = entryMetrics(entry.entry)[metric];
+    return value !== null && value !== undefined ? `${goal.name}: ${formatGoalValue(value, goal.unit || goalMetricUnit(metric))} / ${formatGoalValue(goal.target, goal.unit || goalMetricUnit(metric))}` : null;
+  }).filter(Boolean);
+  addSection("Goal progress", goalMovement, "No linked goals moved in this workout.");
+  summary.append(insights);
+}
+
 function renderPlayerRecap() {
   setWorkoutState("recap");
   trackingCard.hidden = false;
@@ -1845,16 +2107,19 @@ function renderPlayerRecap() {
   $("tracking-finish").hidden = true;
   trackingList.replaceChildren();
   const summary = element("div", "player-recap-summary");
-  summary.append(element("h2", "", session.name || "Workout Summary"), element("p", "", `${session.date} · Workout Time — ${formatMinutesSeconds(session.elapsedOffsetSeconds || 0)}`));
+  summary.append(element("h2", "", session.name || "Workout Complete"), element("p", "", `${session.date} · Workout Time — ${formatMinutesSeconds(session.elapsedOffsetSeconds || 0)}`), element("p", "completion-review-note", "Review & Edit Results before permanently finishing this workout."));
   const completedSteps = Math.min(session.player.index, session.player.steps.length);
   const completedSets = session.player.steps.slice(0, completedSteps).filter((step) => step.mode === "sets").length;
   const completedRounds = session.player.steps.slice(0, completedSteps).filter((step) => step.mode === "rounds").length;
+  const results = session.player.results;
+  const totalLoggedSets = results.reduce((total, entry) => total + (entry?.setsDetail?.length || 0), 0);
+  const totalVolume = results.reduce((total, entry) => total + (entry ? (entryMetrics(entry).volume || 0) : 0), 0);
   const stats = element("div", "player-recap-stats");
-  [["Sections", sectionGroups(session.exerciseList, session.sections).length], ["Exercises", new Set(session.player.steps.slice(0, completedSteps).map((step) => step.exerciseIndex)).size], ["Sets", completedSets], ["Rounds", completedRounds]].forEach(([label, value]) => {
+  [["Duration", formatMinutesSeconds(session.elapsedOffsetSeconds || 0)], ["Exercises", new Set(session.player.steps.slice(0, completedSteps).map((step) => step.exerciseIndex)).size], ["Sets", totalLoggedSets || completedSets], ["Volume", totalVolume ? `${totalVolume.toLocaleString()} lbs` : "—"]].forEach(([label, value]) => {
     const stat = element("div", "player-recap-stat"); stat.append(element("strong", "", String(value)), element("span", "", label)); stats.append(stat);
   });
   summary.append(stats);
-  const results = session.player.results;
+  renderCompletionInsights(summary, session.exerciseList, results, session.date);
   for (const group of sectionGroups(session.exerciseList, session.sections)) {
     const section = element("section", "player-recap-section"); section.append(element("h3", "", group.name));
     for (const { exercise, index } of group.entries) {
@@ -1894,6 +2159,8 @@ function finishPlayer() {
   const sessionNotes = $("workout-session-notes").value.trim();
   const manual = session.mode === "manual";
   const elapsedSeconds = session.elapsedOffsetSeconds || 0;
+  const recordWorkout = { id: session.id, name: session.name || "Workout", exercises: session.exerciseList };
+  recordPersonalRecords(recordWorkout, session.date, actuals, session.exerciseList);
   if (session.id) {
     const next = savedWorkouts.map((workout) => workout.id === session.id ? { ...workout, completedDates: [...new Set([...completedDates(workout), session.date])], actualLogs: { ...workout.actualLogs, [session.date]: actuals }, progressRecordsByDate: { ...(workout.progressRecordsByDate ?? {}), [session.date]: buildExerciseProgressRecords(workout, session.date, actuals) }, notesByDate: { ...(workout.notesByDate ?? {}), [session.date]: sessionNotes }, loggedExercisesByDate: { ...workout.loggedExercisesByDate, [session.date]: workout.exercises.map((exercise) => ({ ...exercise })) }, elapsedByDate: { ...workout.elapsedByDate, [session.date]: elapsedSeconds } } : workout);
     if (!persistHistory(next)) return;
@@ -1950,6 +2217,7 @@ function completeSession() {
     const recordMessage = newRecords.length ? ` · ${[...new Set(newRecords)].join(" & ")}!` : "";
     const manual = session.mode === "manual";
     const elapsedSeconds = session.mode === "manual" && !session.timeEdited ? null : currentElapsed();
+    recordPersonalRecords({ id: session.id, name: session.name || workoutNameInput.value.trim(), exercises: sessionExercises }, session.date, actuals, sessionExercises);
     if (session.id) {
       const next = savedWorkouts.map((workout) => workout.id === session.id ? {
         ...workout,
@@ -2084,6 +2352,8 @@ function persistHistory(nextHistory) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextHistory));
     savedWorkouts = nextHistory;
+    if (typeof syncGoalsFromWorkouts === "function") syncGoalsFromWorkouts();
+    if (typeof queueCloudSave === "function") queueCloudSave();
     return true;
   } catch (error) {
     console.error("Unable to save workout history:", error);
@@ -2557,6 +2827,7 @@ function addRestDay(date) {
   try {
     localStorage.setItem(REST_KEY, JSON.stringify(next));
     restDays = next;
+    if (typeof queueCloudSave === "function") queueCloudSave();
   } catch (error) {
     notify("Could not save the rest day.");
     return;
@@ -2572,6 +2843,7 @@ function removeRestDay(date) {
   try {
     localStorage.setItem(REST_KEY, JSON.stringify(next));
     restDays = next;
+    if (typeof queueCloudSave === "function") queueCloudSave();
   } catch (error) {
     notify("Could not remove the rest day.");
     return;
@@ -3247,7 +3519,8 @@ $("profile-form").addEventListener("submit", event => {
   try {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
     profile = next;
-    
+    if (typeof queueCloudSave === "function") queueCloudSave();
+
     renderGoalTracking();
     renderBodyWeight();
     $("profile-save-status").textContent = "Profile saved.";
@@ -3263,11 +3536,46 @@ function readGoals() {
   } catch (error) { return []; }
 }
 function writeGoals(next) {
-  try { localStorage.setItem(GOALS_KEY, JSON.stringify(next)); return true; }
+  try { localStorage.setItem(GOALS_KEY, JSON.stringify(next)); if (typeof queueCloudSave === "function") queueCloudSave(); return true; }
   catch (error) { notify("Could not save goals in this browser."); return false; }
 }
 function goalTypeLabel(type) {
   return ({ strength: "Strength", "exercise-performance": "Exercise performance", consistency: "Consistency", endurance: "Endurance", "body-metric": "Body metric", custom: "Custom" })[type] || "Custom";
+}
+function goalExerciseNames() {
+  return [...new Set([
+    ...exercises.map(exercise => exercise.name),
+    ...savedWorkouts.flatMap(workout => Object.entries(workout.loggedExercisesByDate || {}).flatMap(([, logged]) => (logged || []).map(exercise => exercise?.name))),
+    ...savedWorkouts.flatMap(workout => (workout.exercises || []).map(exercise => exercise?.name)),
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+function populateGoalExerciseOptions(selected = "") {
+  const select = $("goal-exercise");
+  select.replaceChildren(element("option", "", "Not linked to an exercise"));
+  select.firstElementChild.value = "";
+  goalExerciseNames().forEach(name => { const option = element("option", "", name); option.value = name; select.append(option); });
+  if (selected) select.value = selected;
+}
+function goalMetricLabel(metric) {
+  return ({ weight: "Best weight", reps: "Best reps", volume: "Total volume", duration: "Best duration", distance: "Best distance", rounds: "Most rounds" })[metric] || "Best weight";
+}
+function goalMetricUnit(metric) {
+  return ({ weight: "lbs", reps: "reps", volume: "lbs", duration: "sec", distance: "mi", rounds: "rounds" })[metric] || "";
+}
+function syncGoalsFromWorkouts() {
+  const goals = readGoals();
+  let changed = false;
+  const next = goals.map(goal => {
+    if (!goal.exerciseName || !goal.metric) return goal;
+    const values = exerciseRecords(goal.exerciseName).map(record => entryMetrics(record.entry)[goal.metric]).filter(value => value !== null && value !== undefined && Number.isFinite(Number(value)));
+    if (!values.length) return goal;
+    const current = Math.max(...values.map(Number));
+    if (Number(goal.current) === current && goal.status !== "archived") return goal;
+    changed = true;
+    return { ...goal, current, status: goal.status === "archived" ? "archived" : (current >= Number(goal.target) ? "achieved" : "active"), updatedAt: new Date().toISOString() };
+  });
+  if (changed) writeGoals(next);
+  return next;
 }
 function formatGoalValue(value, unit) {
   const number = Number(value);
@@ -3312,7 +3620,7 @@ function resetGoalForm() {
 function renderGoals() {
   const list = $("goals-list");
   list.replaceChildren();
-  const goals = readGoals().map(goal => ({ ...goal, status: normalizeGoalStatus(goal) }));
+  const goals = syncGoalsFromWorkouts().map(goal => ({ ...goal, status: normalizeGoalStatus(goal) }));
   const visible = goals.filter(goal => goal.status === goalStatus);
   if (!visible.length) {
     const copy = goalStatus === "active" ? "Create your first goal to start tracking progress." : `No ${goalStatus} goals yet.`;
@@ -3332,7 +3640,13 @@ function renderGoals() {
     const bar = element("div", "goal-progress-bar");
     const fill = element("span"); fill.style.width = `${percent}%`; bar.append(fill);
     const meta = element("div", "goal-card-meta");
-    meta.append(element("span", "", goal.targetDate ? `Target date: ${goal.targetDate}` : "No target date"));
+    meta.append(element("span", "", goal.targetDate ? `Target date: ${goal.targetDate}` : "No target date"), element("span", "", goal.exerciseName ? `${goal.exerciseName} · ${goalMetricLabel(goal.metric)}` : "Manual progress"));
+    const milestones = element("div", "goal-milestones");
+    [25, 50, 75, 100].forEach((milestone, index, all) => {
+      const item = element("div", `goal-milestone${percent >= milestone ? " is-complete" : percent < milestone && (index === 0 || percent >= all[index - 1]) ? " is-next" : ""}`);
+      item.append(element("span", "goal-milestone-dot", percent >= milestone ? "✓" : ""), element("span", "", `${Math.round(target * milestone / 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}${goal.unit ? ` ${goal.unit}` : ""}`));
+      milestones.append(item);
+    });
     const actions = element("div", "goal-card-actions");
     const edit = element("button", "btn secondary", "Edit"); edit.type = "button";
     edit.addEventListener("click", () => editGoal(goal));
@@ -3341,11 +3655,12 @@ function renderGoals() {
     const remove = element("button", "btn secondary", "Delete"); remove.type = "button";
     remove.addEventListener("click", () => { if (confirm(`Delete “${goal.name}”?`)) deleteGoal(goal.id); });
     actions.append(edit, archive, remove);
-    card.append(heading, values, bar, meta, actions); list.append(card);
+    card.append(heading, values, bar, milestones, meta, actions); list.append(card);
   });
 }
 function editGoal(goal) {
   $("goal-id").value = goal.id; $("goal-name").value = goal.name; $("goal-type").value = goal.type;
+  populateGoalExerciseOptions(goal.exerciseName || ""); $("goal-metric").value = goal.metric || "weight";
   $("goal-current").value = goal.current; $("goal-target").value = goal.target; $("goal-unit").value = goal.unit || ""; $("goal-date").value = goal.targetDate || "";
   $("goal-form-panel").hidden = false; $("create-goal").textContent = "Cancel"; $("goal-name").focus();
 }
@@ -3358,7 +3673,7 @@ function deleteGoal(id) {
 }
 $("create-goal").addEventListener("click", () => {
   if (!$("goal-form-panel").hidden) { resetGoalForm(); return; }
-  $("goal-form-panel").hidden = false; $("create-goal").textContent = "Cancel"; $("goal-name").focus();
+  populateGoalExerciseOptions(); $("goal-metric").value = "weight"; $("goal-form-panel").hidden = false; $("create-goal").textContent = "Cancel"; $("goal-name").focus();
 });
 $("cancel-goal").addEventListener("click", resetGoalForm);
 $("goal-form").addEventListener("submit", event => {
@@ -3368,7 +3683,9 @@ $("goal-form").addEventListener("submit", event => {
   if (!Number.isFinite(current) || !Number.isFinite(target) || target <= 0 || current < 0) { notify("Enter valid current and target values."); return; }
   const goals = readGoals(), id = $("goal-id").value || (typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `goal-${Date.now()}`);
   const previous = goals.find(goal => goal.id === id);
-  const nextGoal = { id, name: $("goal-name").value.trim(), type: $("goal-type").value, current, target, unit: $("goal-unit").value.trim(), targetDate: $("goal-date").value, status: previous?.status === "archived" ? "archived" : (current >= target ? "achieved" : "active"), createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const exerciseName = $("goal-exercise").value;
+  const metric = $("goal-metric").value;
+  const nextGoal = { id, name: $("goal-name").value.trim(), type: $("goal-type").value, current, target, unit: $("goal-unit").value.trim() || (exerciseName ? goalMetricUnit(metric) : ""), targetDate: $("goal-date").value, exerciseName, metric, status: previous?.status === "archived" ? "archived" : (current >= target ? "achieved" : "active"), createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
   const next = previous ? goals.map(goal => goal.id === id ? nextGoal : goal) : [...goals, nextGoal];
   if (writeGoals(next)) { resetGoalForm(); renderGoals(); notify(previous ? "Goal updated." : "Goal created."); }
 });

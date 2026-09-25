@@ -121,6 +121,15 @@
       </section>
       <section id="progress-card" class="card progress-card" aria-labelledby="progress-heading" hidden>
         <div class="section-heading"><div><p class="eyebrow">YOUR RESULTS</p><h1 id="progress-heading">Exercise Progress</h1></div></div>
+        <div class="progress-dashboard-heading"><div><p class="eyebrow">FORGE DASHBOARD</p><h2>How are you doing?</h2></div><div class="progress-range-tabs" role="tablist" aria-label="Progress date range"><button type="button" class="action-button" data-progress-range="7">7D</button><button type="button" class="action-button is-active" data-progress-range="30">30D</button><button type="button" class="action-button" data-progress-range="90">3M</button><button type="button" class="action-button" data-progress-range="180">6M</button><button type="button" class="action-button" data-progress-range="365">1Y</button><button type="button" class="action-button" data-progress-range="all">All</button></div></div>
+        <div id="progress-overview" class="progress-overview"></div>
+        <div class="progress-dashboard-grid"><section><h2>Goals</h2><div id="progress-goals" class="dashboard-list"></div></section><section><h2>Personal records</h2><div id="progress-prs" class="dashboard-list"></div></section></div>
+        <section class="progress-trends-section"><h2>Trends</h2><div id="progress-trends" class="progress-trends"></div></section>
+        <section class="progress-consistency-section"><h2>Consistency</h2><div id="progress-consistency" class="progress-consistency"></div><div id="progress-heatmap" class="progress-heatmap"></div></section>
+        <section class="progress-comparisons-section"><h2>Progress Since...</h2><div id="progress-comparisons" class="progress-comparisons"></div></section>
+        <section class="progress-reports-section"><h2>Reviews & reports</h2><div class="progress-reports-grid"><article><h3>Weekly Review</h3><div id="weekly-report" class="report-card"></div></article><article><h3>Monthly Report</h3><div id="monthly-report" class="report-card"></div></article></div></section>
+        <section class="progress-scorecard-section"><h2>Forge Scorecard</h2><div id="forge-scorecard" class="forge-scorecard"></div></section>
+        <h2 class="progress-detail-heading">Exercise Progress</h2>
         <div class="progress-controls">
           <label>Exercise<select id="progress-exercise"></select></label>
           <label>Measure<select id="progress-metric">
@@ -139,6 +148,8 @@
         <div id="progress-table" class="progress-table"></div>
         <h2>Recent performances</h2>
         <div id="exercise-history" class="progress-table"></div>
+        <h2>Personal records</h2>
+        <div id="pr-history" class="pr-history"></div>
       </section>
       <section id="goals-card" class="card goals-card" aria-labelledby="goals-heading" hidden>
         <div class="section-heading"><div><p class="eyebrow">YOUR TARGETS</p><h1 id="goals-heading">Goals</h1></div><button type="button" id="create-goal" class="btn primary">+ Create Goal</button></div>
@@ -147,6 +158,8 @@
             <input id="goal-id" type="hidden" />
             <label>Goal name<input id="goal-name" type="text" maxlength="120" placeholder="e.g. Bench press 225 lb" required /></label>
             <label>Type<select id="goal-type" required><option value="strength">Strength</option><option value="exercise-performance">Exercise performance</option><option value="consistency">Consistency</option><option value="endurance">Endurance</option><option value="body-metric">Body metric</option><option value="custom">Custom</option></select></label>
+            <label>Track exercise<select id="goal-exercise"><option value="">Not linked to an exercise</option></select></label>
+            <label>Progress measure<select id="goal-metric"><option value="weight">Best weight</option><option value="reps">Best reps</option><option value="volume">Total volume</option><option value="duration">Best duration</option><option value="distance">Best distance</option><option value="rounds">Most rounds</option></select></label>
             <label>Current value<input id="goal-current" type="number" min="0" step="0.1" placeholder="0" required /></label>
             <label>Target value<input id="goal-target" type="number" min="0.1" step="0.1" placeholder="100" required /></label>
             <label>Unit<input id="goal-unit" type="text" maxlength="20" placeholder="lb, reps, days" /></label>

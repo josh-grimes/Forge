@@ -31,7 +31,14 @@ Copy the three files in `google-apps-script` into an Apps Script project:
 3. Add an HTML file named `exercise` and paste `exercise.html`.
 4. Deploy the project as a web app.
 
-The Google Apps Script build stores Forge state in the connected Google Sheet. After changing these files, deploy a new web-app version.
+`Code.gs` is the Sheet-backed storage layer. If you use a different Sheet, replace
+`SPREADSHEET_ID` in that file before deploying. The Apps Script `Index.html` is
+self-contained, so it does not need separate CSS, JavaScript, or image files.
+
+The Google Apps Script build stores Forge state, goals, profile/weight data, and
+personal-record history in the connected Google Sheet. It also maintains readable
+`Workout Log` and `Rest Days` tabs. After changing these files, deploy a new
+web-app version.
 
 ## Included features
 
