@@ -8,22 +8,26 @@ create table if not exists public.forge_user_state (
 
 alter table public.forge_user_state enable row level security;
 
+drop policy if exists "Users can read their Forge state" on public.forge_user_state;
 create policy "Users can read their Forge state"
   on public.forge_user_state for select
   to authenticated
   using ((select auth.uid()) = user_id);
 
+drop policy if exists "Users can create their Forge state" on public.forge_user_state;
 create policy "Users can create their Forge state"
   on public.forge_user_state for insert
   to authenticated
   with check ((select auth.uid()) = user_id);
 
+drop policy if exists "Users can update their Forge state" on public.forge_user_state;
 create policy "Users can update their Forge state"
   on public.forge_user_state for update
   to authenticated
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
+drop policy if exists "Users can delete their Forge state" on public.forge_user_state;
 create policy "Users can delete their Forge state"
   on public.forge_user_state for delete
   to authenticated
