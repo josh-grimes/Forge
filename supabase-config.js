@@ -2,5 +2,5 @@
 // Find them in Supabase: Project Settings -> API.
 window.FORGE_SUPABASE = Object.freeze({
   url: "https://fukufmeapvnyprfyquuw.supabase.co",
-  publishableKey: "YOUR_SUPABASE_PUBLISHABLE_KEY",
+  publishableKey: "sb_publishable_DG7qLLnzvGm-sAKmrFKmNA_QvWVUKHy",
 });
