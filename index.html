@@ -2645,16 +2645,27 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .section-card, .exercise-item, .saved-workout, .player-step-card, .player-rest-card { animation: none; }
 }
+.cloud-status-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
 
 </style>
-    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/josh-grimes/Forge/main/local/forge-icon.png">
+    <link rel="icon" type="image/png" href="local/forge-icon.png">
 
   </head>
   <body>
     <header class="site-header">
-      <div class="logo-frame" id="home-logo" role="button" tabindex="0" aria-label="Go to dashboard"><img class="logo" src="https://raw.githubusercontent.com/josh-grimes/Forge/main/local/forge-logo.png" alt="Forge logo" /></div>
+      <div class="logo-frame" id="home-logo" role="button" tabindex="0" aria-label="Go to dashboard"><img class="logo" src="local/forge-logo.png" alt="Forge logo" /></div>
       <div class="header-buttons">
-        <span id="cloud-status" class="save-feedback" role="status" aria-live="polite">Connecting to Google Sheets…</span>
+        <button id="cloud-status" class="save-feedback cloud-status-button" type="button" aria-live="polite" title="Open account options">Supabase not configured</button>
         <button type="button" id="add-new-workout" class="btn primary">Forge Workout</button>
 
         <button type="button" id="open-profile" class="btn secondary"><span class="profile-button-label">Profile</span><span class="profile-avatar-frame"><svg class="profile-avatar-placeholder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg><img id="header-avatar" class="header-avatar" alt="" hidden /></span></button>
@@ -3681,6 +3692,8 @@ function runExerciseDatabaseTests() {
 const exerciseLibraryStatus = validateExerciseLibrary();
 
 </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="supabase-config.js"></script>
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
@@ -7410,7 +7423,7 @@ renderStreaks();
 setWorkoutState("not-started");
 
 $("export-forge").addEventListener("click", () => {
-  const data = { workouts: savedWorkouts, restDays, profile };
+  const data = cloudSnapshot_();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -7430,11 +7443,28 @@ window.addEventListener("resize", () => {
   }, 150);
 });
 
-const CLOUD_PENDING_KEY = "forge-cloud-pending";
+const CLOUD_PENDING_KEY = "forge-supabase-pending";
+const CLOUD_LAST_USER_KEY = "forge-supabase-last-user";
+const CLOUD_SYNC_KEYS = new Set([
+  STORAGE_KEY,
+  REST_KEY,
+  PROFILE_KEY,
+  GOALS_KEY,
+  PR_HISTORY_KEY,
+  WORKOUT_TEMPLATES_KEY,
+  SECTION_TEMPLATES_KEY,
+  WORKOUT_DRAFT_KEY,
+  "forge-favorite-exercises",
+  "forge-recent-exercises",
+]);
 let cloudReady = false;
 let cloudSaving = false;
 let cloudDirty = false;
 let cloudVersion = 0;
+let cloudClient = null;
+let cloudUser = null;
+let cloudSaveTimer = null;
+let cloudApplying = false;
 
 function cloudJson_(key, fallback) {
   try { const value = JSON.parse(localStorage.getItem(key) || "null"); return value ?? fallback; }
@@ -7442,22 +7472,39 @@ function cloudJson_(key, fallback) {
 }
 function cloudSnapshot_() {
   return {
-    workouts: savedWorkouts,
-    restDays,
-    profile,
+    schemaVersion: 1,
+    workouts: cloudJson_(STORAGE_KEY, []),
+    restDays: cloudJson_(REST_KEY, []),
+    profile: cloudJson_(PROFILE_KEY, {}),
     goals: cloudJson_(GOALS_KEY, []),
     prHistory: cloudJson_(PR_HISTORY_KEY, []),
+    workoutTemplates: cloudJson_(WORKOUT_TEMPLATES_KEY, []),
+    sectionTemplates: cloudJson_(SECTION_TEMPLATES_KEY, []),
+    workoutDraft: cloudJson_(WORKOUT_DRAFT_KEY, null),
+    favoriteExerciseIds: cloudJson_("forge-favorite-exercises", []),
+    recentExerciseIds: cloudJson_("forge-recent-exercises", []),
   };
 }
 function cloudSetLocal_(remote) {
-  savedWorkouts = Array.isArray(remote.workouts) ? remote.workouts : [];
-  restDays = Array.isArray(remote.restDays) ? remote.restDays : [];
-  profile = remote.profile && typeof remote.profile === "object" ? remote.profile : {};
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(savedWorkouts));
-  localStorage.setItem(REST_KEY, JSON.stringify(restDays));
-  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-  localStorage.setItem(GOALS_KEY, JSON.stringify(Array.isArray(remote.goals) ? remote.goals : []));
-  localStorage.setItem(PR_HISTORY_KEY, JSON.stringify(Array.isArray(remote.prHistory) ? remote.prHistory : []));
+  cloudApplying = true;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(remote.workouts) ? remote.workouts : []));
+    localStorage.setItem(REST_KEY, JSON.stringify(Array.isArray(remote.restDays) ? remote.restDays : []));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(remote.profile && typeof remote.profile === "object" ? remote.profile : {}));
+    localStorage.setItem(GOALS_KEY, JSON.stringify(Array.isArray(remote.goals) ? remote.goals : []));
+    localStorage.setItem(PR_HISTORY_KEY, JSON.stringify(Array.isArray(remote.prHistory) ? remote.prHistory : []));
+    localStorage.setItem(WORKOUT_TEMPLATES_KEY, JSON.stringify(Array.isArray(remote.workoutTemplates) ? remote.workoutTemplates : []));
+    localStorage.setItem(SECTION_TEMPLATES_KEY, JSON.stringify(Array.isArray(remote.sectionTemplates) ? remote.sectionTemplates : []));
+    localStorage.setItem("forge-favorite-exercises", JSON.stringify(Array.isArray(remote.favoriteExerciseIds) ? remote.favoriteExerciseIds : []));
+    localStorage.setItem("forge-recent-exercises", JSON.stringify(Array.isArray(remote.recentExerciseIds) ? remote.recentExerciseIds : []));
+    if (remote.workoutDraft && typeof remote.workoutDraft === "object") {
+      localStorage.setItem(WORKOUT_DRAFT_KEY, JSON.stringify(remote.workoutDraft));
+    } else {
+      localStorage.removeItem(WORKOUT_DRAFT_KEY);
+    }
+  } finally {
+    cloudApplying = false;
+  }
 }
 function cloudNotice_(message) {
   const status = $("cloud-status");
@@ -7466,56 +7513,196 @@ function cloudNotice_(message) {
 function queueCloudSave() {
   cloudDirty = true;
   try { localStorage.setItem(CLOUD_PENDING_KEY, "1"); } catch (_) {}
-  flushCloudSave_();
+  clearTimeout(cloudSaveTimer);
+  cloudSaveTimer = setTimeout(flushCloudSave_, 350);
 }
-function flushCloudSave_() {
+async function flushCloudSave_() {
   if (!cloudReady || cloudSaving || !cloudDirty) return;
   cloudDirty = false;
   cloudSaving = true;
-  cloudNotice_("Saving to Google Sheets…");
-  google.script.run
-    .withSuccessHandler(result => {
-      cloudVersion = result.version;
-      cloudSaving = false;
-      if (cloudDirty) flushCloudSave_();
-      else { try { localStorage.removeItem(CLOUD_PENDING_KEY); } catch (_) {} cloudNotice_("Saved to Google Sheets"); }
-    })
-    .withFailureHandler(error => {
-      cloudSaving = false;
-      cloudDirty = true;
-      cloudNotice_("Not synced: " + (error.message || error));
-      notify("Forge could not save to Google Sheets. Reload before making more changes.");
-    })
-    .saveForgeState(cloudVersion, cloudSnapshot_());
+  cloudNotice_("Saving to Supabase…");
+  const { data, error } = await cloudClient.rpc("save_forge_state", {
+    expected_version: cloudVersion,
+    new_data: cloudSnapshot_(),
+  });
+  cloudSaving = false;
+  if (error) {
+    if (/VERSION_CONFLICT|40001/.test(`${error.message} ${error.code}`)) {
+      await resolveCloudConflict_();
+      return;
+    }
+    cloudDirty = true;
+    cloudNotice_("Not synced — click for details");
+    console.error("Supabase save failed:", error);
+    return;
+  }
+  cloudVersion = Number(data) || cloudVersion + 1;
+  if (cloudDirty) flushCloudSave_();
+  else {
+    try { localStorage.removeItem(CLOUD_PENDING_KEY); } catch (_) {}
+    cloudNotice_("Saved to Supabase");
+  }
 }
-function initializeCloud() {
-  cloudNotice_("Loading Google Sheet…");
-  google.script.run
-    .withSuccessHandler(remote => {
-      const localPending = localStorage.getItem(CLOUD_PENDING_KEY) === "1";
-      const localHasData = savedWorkouts.length || restDays.length || Object.values(profile).some(Boolean);
-      const remoteHasData = remote.workouts?.length || remote.restDays?.length || Object.values(remote.profile || {}).some(Boolean);
-      cloudVersion = remote.version || 0;
-      cloudReady = true;
-      if (localPending || (!remoteHasData && localHasData)) {
-        if (!localPending || confirm("This browser has Forge data that is not in the Google Sheet yet. Upload it now?")) queueCloudSave_();
-        else { cloudSetLocal_(remote); renderAfterCloud_(); }
-      } else {
-        cloudSetLocal_(remote);
-        renderAfterCloud_();
+function cloudHasData_(state) {
+  return Boolean(state.workouts?.length || state.restDays?.length || state.goals?.length ||
+    state.workoutTemplates?.length || state.sectionTemplates?.length || state.workoutDraft ||
+    state.favoriteExerciseIds?.length || state.recentExerciseIds?.length ||
+    state.profile && Object.values(state.profile).some(Boolean));
+}
+async function fetchCloudRow_() {
+  const { data, error } = await cloudClient.from("forge_user_state")
+    .select("version,data,updated_at")
+    .eq("user_id", cloudUser.id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+async function resolveCloudConflict_() {
+  try {
+    const row = await fetchCloudRow_();
+    if (!row) { cloudVersion = 0; cloudDirty = true; flushCloudSave_(); return; }
+    if (confirm("Forge was changed on another device. Load that newer copy? Select Cancel to keep this browser's copy.")) {
+      cloudVersion = Number(row.version) || 0;
+      cloudSetLocal_(row.data || {});
+      localStorage.removeItem(CLOUD_PENDING_KEY);
+      renderAfterCloud_();
+      cloudNotice_("Loaded newer Supabase data");
+    } else {
+      cloudVersion = Number(row.version) || 0;
+      cloudDirty = true;
+      flushCloudSave_();
+    }
+  } catch (error) {
+    cloudDirty = true;
+    cloudNotice_("Sync conflict — click to retry");
+    console.error("Supabase conflict resolution failed:", error);
+  }
+}
+async function connectCloudUser_(user) {
+  if (!user || cloudUser?.id === user.id && cloudReady) return;
+  cloudUser = user;
+  cloudReady = false;
+  cloudNotice_("Loading Supabase…");
+  try {
+    const row = await fetchCloudRow_();
+    const localState = cloudSnapshot_();
+    const localPending = localStorage.getItem(CLOUD_PENDING_KEY) === "1";
+    const lastUser = localStorage.getItem(CLOUD_LAST_USER_KEY);
+    cloudVersion = Number(row?.version) || 0;
+    cloudReady = true;
+    localStorage.setItem(CLOUD_LAST_USER_KEY, user.id);
+
+    if (!row) {
+      if (cloudHasData_(localState) && lastUser && lastUser !== user.id &&
+          !confirm("This account has no Forge cloud data. Upload the data currently in this browser to this account?")) {
+        cloudReady = false;
+        cloudNotice_("Browser-only data — click to sign out");
+        return;
       }
-      cloudNotice_("Saved to Google Sheets");
-    })
-    .withFailureHandler(error => {
-      cloudNotice_("Could not load Google Sheet: " + (error.message || error));
-      notify("Forge could not connect to Google Sheets.");
-    })
-    .getForgeState();
+      cloudDirty = true;
+      await flushCloudSave_();
+      return;
+    }
+
+    if (localPending && cloudHasData_(localState)) {
+      if (confirm("This browser has unsynced Forge changes. Upload them to Supabase?")) {
+        cloudDirty = true;
+        await flushCloudSave_();
+      } else {
+        cloudSetLocal_(row.data || {});
+        localStorage.removeItem(CLOUD_PENDING_KEY);
+        renderAfterCloud_();
+        cloudNotice_("Loaded from Supabase");
+      }
+    } else {
+      cloudSetLocal_(row.data || {});
+      renderAfterCloud_();
+      cloudNotice_("Saved to Supabase");
+    }
+  } catch (error) {
+    cloudReady = false;
+    cloudNotice_("Supabase unavailable — local mode");
+    console.error("Supabase load failed:", error);
+  }
+}
+async function cloudAccountAction_() {
+  if (!cloudClient) {
+    alert("Add your Supabase project URL and publishable key to supabase-config.js, then reload Forge.");
+    return;
+  }
+  if (cloudUser) {
+    if (confirm(`Sign out of Forge cloud sync for ${cloudUser.email || "this account"}?`)) {
+      await cloudClient.auth.signOut();
+      cloudUser = null;
+      cloudReady = false;
+      cloudNotice_("Signed out — click to sign in");
+    }
+    return;
+  }
+  const email = prompt("Enter your email to receive a Forge sign-in link:")?.trim();
+  if (!email) return;
+  const redirectTo = location.href.split("#")[0].split("?")[0];
+  const { error } = await cloudClient.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
+  if (error) {
+    cloudNotice_("Sign-in failed — click to retry");
+    alert(error.message);
+  } else {
+    cloudNotice_("Check your email for the sign-in link");
+  }
+}
+function observeLocalChanges_() {
+  if (window.__forgeSupabaseStorageObserved) return;
+  window.__forgeSupabaseStorageObserved = true;
+  const originalSetItem = Storage.prototype.setItem;
+  const originalRemoveItem = Storage.prototype.removeItem;
+  Storage.prototype.setItem = function(key, value) {
+    originalSetItem.call(this, key, value);
+    if (this === localStorage && CLOUD_SYNC_KEYS.has(key) && !cloudApplying) queueCloudSave();
+  };
+  Storage.prototype.removeItem = function(key) {
+    originalRemoveItem.call(this, key);
+    if (this === localStorage && CLOUD_SYNC_KEYS.has(key) && !cloudApplying) queueCloudSave();
+  };
+}
+async function initializeCloud() {
+  $("cloud-status").addEventListener("click", cloudAccountAction_);
+  observeLocalChanges_();
+  const settings = window.FORGE_SUPABASE || {};
+  const configured = /^https:\/\//.test(settings.url || "") &&
+    settings.publishableKey && !settings.publishableKey.startsWith("YOUR_");
+  if (!configured || !window.supabase?.createClient) {
+    cloudNotice_("Supabase setup required — click here");
+    return;
+  }
+  cloudClient = window.supabase.createClient(settings.url, settings.publishableKey, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  });
+  cloudClient.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      cloudUser = null;
+      cloudReady = false;
+      cloudNotice_("Signed out — click to sign in");
+    } else if (session?.user && session.user.id !== cloudUser?.id) {
+      setTimeout(() => connectCloudUser_(session.user), 0);
+    }
+  });
+  const { data: { session }, error } = await cloudClient.auth.getSession();
+  if (error) {
+    cloudNotice_("Supabase sign-in unavailable");
+    console.error(error);
+  } else if (session?.user) {
+    await connectCloudUser_(session.user);
+  } else {
+    cloudNotice_("Sign in to sync — click here");
+  }
 }
 function queueCloudSave_() { cloudDirty = true; flushCloudSave_(); }
 function renderAfterCloud_() {
   loadHistory();
   loadProfile();
+  migrateLegacyGoals();
+  populateWorkoutTemplates();
+  updateBuilderStartOptions();
   renderGoals();
   renderWorkoutHistory();
   renderCalendar();
