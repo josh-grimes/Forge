@@ -6,7 +6,7 @@ const REST_TAB = 'Rest Days';
 const CHUNK_SIZE = 30000;
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
+  return HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('Forge Workout Tracker')
     .setFaviconUrl(
       'https://raw.githubusercontent.com/josh-grimes/Forge/main/Local-Forge-Export/forge-icon.png'
@@ -15,6 +15,10 @@ function doGet() {
       'viewport',
       'width=device-width, initial-scale=1, viewport-fit=cover'
     );
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 function forgeSheet_() {
@@ -70,6 +74,7 @@ function writeReadableTabs_(spreadsheet, data) {
     'Date', 'Workout', 'Section', 'Status', 'Exercise', 'Set',
     'Planned reps', 'Planned weight (lbs)', 'Planned time (sec)',
     'Actual reps', 'Actual weight (lbs)', 'Actual time (sec)', 'Workout time (sec)',
+    'Planned distance (mi)', 'Actual distance (mi)',
   ]];
   data.workouts.forEach(workout => {
     // Weekly repeats generate future calendar dates in the app. Keep this tab finite:
@@ -84,7 +89,10 @@ function writeReadableTabs_(spreadsheet, data) {
       const exercises = Array.isArray(workout.exercises) ? workout.exercises : [];
       exercises.forEach((exercise, index) => {
         const logged = workout.actualLogs && workout.actualLogs[date] && workout.actualLogs[date][index] || {};
-        const count = Math.max(1, Number(exercise.sets) || 0, Number(logged.sets) || 0);
+        const section = (workout.sections || []).find(item => item.id === (exercise.sectionId || 'main')) || {};
+        const isRounds = section.format === 'rounds';
+        const count = Math.max(1, Number(isRounds ? section.rounds : exercise.sets) || 0,
+          Number(isRounds ? logged.rounds : logged.sets) || 0);
         for (let set = 0; set < Math.min(count, 100); set++) {
           const actual = logged.setsDetail && logged.setsDetail[set] || {};
           log.push([
@@ -97,6 +105,8 @@ function writeReadableTabs_(spreadsheet, data) {
             safeText_(actual.weight != null ? actual.weight : logged.weight),
             safeText_(actual.duration != null ? actual.duration : logged.duration),
             workout.elapsedByDate && workout.elapsedByDate[date] != null ? Number(workout.elapsedByDate[date]) : '',
+            safeText_(exercise.distance),
+            safeText_(actual.distance != null ? actual.distance : logged.distance),
           ]);
         }
       });

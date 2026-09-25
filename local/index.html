@@ -12,13 +12,13 @@
     />
     <link rel="stylesheet" href="style.css" />
     <link rel="icon" type="image/png" href="forge-icon.png">
-    <script src="script.js" defer></script>
+
   </head>
   <body>
     <header class="site-header">
-      <div class="logo-frame"><img class="logo" src="forge-logo.png" alt="Forge logo" /></div>
+      <div class="logo-frame" id="home-logo" role="button" tabindex="0" aria-label="Go to dashboard"><img class="logo" src="forge-logo.png" alt="Forge logo" /></div>
       <div class="header-buttons">
-        <button type="button" id="add-new-workout" class="btn primary">+ Workout</button>
+        <button type="button" id="add-new-workout" class="btn primary">Forge Workout</button>
 
         <button type="button" id="open-profile" class="btn secondary"><span class="profile-button-label">Profile</span><span class="profile-avatar-frame"><svg class="profile-avatar-placeholder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg><img id="header-avatar" class="header-avatar" alt="" hidden /></span></button>
 
@@ -30,6 +30,8 @@
             <button type="button" id="export-forge" class="btn secondary">Export Data</button>
             <button type="button" id="open-calendar" class="btn secondary">Calendar</button>
             <button type="button" id="open-progress" class="btn secondary">Progress</button>
+            <button type="button" id="open-goals" class="btn secondary">Goals</button>
+            <button type="button" id="open-templates" class="btn secondary">Templates</button>
             <button type="button" id="open-weight" class="btn secondary">Track Weight</button>
             <button type="button" id="cancel-workout-edit" class="btn secondary" hidden>Cancel Edit</button>
           </nav>
@@ -81,11 +83,24 @@
             </select></label>
 <label>Weight (lbs)<input id="profile-weight" type="number" min="0" step="0.1" placeholder="lbs" /></label>
 <label>Target weight (lbs)<input id="profile-targetWeight" type="number" min="0.1" step="0.1" placeholder="lbs" /></label>
+<label>Goal 1<input id="profile-goal1" type="text" maxlength="120" placeholder="e.g. Bench press" /></label>
+<label>Target 1<input id="profile-goal1Target" type="number" min="0" step="0.1" placeholder="Target" /></label>
+<label>Current 1<input id="profile-goal1Current" type="number" min="0" step="0.1" placeholder="Current" /></label>
+<label>Unit 1<input id="profile-goal1Unit" type="text" maxlength="20" placeholder="lbs, miles, days" /></label>
+<label>Goal 2<input id="profile-goal2" type="text" maxlength="120" placeholder="e.g. Work out weekly" /></label>
+<label>Target 2<input id="profile-goal2Target" type="number" min="0" step="0.1" placeholder="Target" /></label>
+<label>Current 2<input id="profile-goal2Current" type="number" min="0" step="0.1" placeholder="Current" /></label>
+<label>Unit 2<input id="profile-goal2Unit" type="text" maxlength="20" placeholder="lbs, miles, days" /></label>
+<label>Goal 3<input id="profile-goal3" type="text" maxlength="120" placeholder="e.g. Run a 5K" /></label>
+<label>Target 3<input id="profile-goal3Target" type="number" min="0" step="0.1" placeholder="Target" /></label>
+<label>Current 3<input id="profile-goal3Current" type="number" min="0" step="0.1" placeholder="Current" /></label>
+<label>Unit 3<input id="profile-goal3Unit" type="text" maxlength="20" placeholder="lbs, miles, days" /></label>
 </div></fieldset><details class="profile-records"><summary>Personal records · optional</summary><p class="profile-hint">Enter your best single lift in pounds, or your highest number of reps.</p><div class="profile-grid"><label>Bench press (lbs)<input id="profile-bench" type="number" min="0" step="0.5" placeholder="lbs" /></label>
 <label>Squat (lbs)<input id="profile-squat" type="number" min="0" step="0.5" placeholder="lbs" /></label>
 <label>Deadlift (lbs)<input id="profile-deadlift" type="number" min="0" step="0.5" placeholder="lbs" /></label>
 <label>Push-ups (reps)<input id="profile-pushups" type="number" min="0" step="1" placeholder="reps" /></label>
 <label>Pull-ups (reps)<input id="profile-pullups" type="number" min="0" step="1" placeholder="reps" /></label></div></details>
+<section class="goal-progress" aria-labelledby="goal-progress-heading"><h2 id="goal-progress-heading">Goal Progress</h2><div id="goal-progress-list"></div></section>
           <div class="profile-save-bar"><p id="profile-save-status" class="save-feedback" role="status">No unsaved changes.</p><button class="btn primary" type="submit">Save Profile</button></div>
         </form>
       </section>
@@ -105,35 +120,99 @@
 
       </section>
       <section id="progress-card" class="card progress-card" aria-labelledby="progress-heading" hidden>
-        <div class="section-heading"><div><p class="eyebrow">YOUR RESULTS</p><h1 id="progress-heading">Progress</h1></div></div>
+        <div class="section-heading"><div><p class="eyebrow">YOUR RESULTS</p><h1 id="progress-heading">Exercise Progress</h1></div></div>
         <div class="progress-controls">
           <label>Exercise<select id="progress-exercise"></select></label>
           <label>Measure<select id="progress-metric">
             <option value="weight">Best weight (lbs)</option>
             <option value="reps">Best reps in a set</option>
             <option value="volume">Total volume (lbs)</option>
+            <option value="sets">Total sets</option>
+            <option value="duration">Best duration (sec)</option>
+            <option value="distance">Best distance (mi)</option>
+            <option value="rounds">Total rounds</option>
           </select></label>
         </div>
+        <div id="progress-summary" class="progress-summary"></div>
+        <div class="progress-metric-tabs" role="tablist" aria-label="Progress metric"><button type="button" class="action-button is-active" data-progress-metric="weight">Strength</button><button type="button" class="action-button" data-progress-metric="volume">Volume</button><button type="button" class="action-button" data-progress-metric="reps">Reps</button><button type="button" class="action-button" data-progress-metric="duration">Duration</button><button type="button" class="action-button" data-progress-metric="distance">Distance</button></div>
         <div id="progress-chart" class="progress-chart" role="group" aria-label="Exercise progress chart"></div>
         <div id="progress-table" class="progress-table"></div>
-        <h2>Exercise History</h2>
+        <h2>Recent performances</h2>
         <div id="exercise-history" class="progress-table"></div>
       </section>
-      <section id="new-workout-card" class="card" hidden aria-labelledby="new-workout-heading">
-        <div class="section-heading">
-          <h1 id="new-workout-heading">New Workout</h1>
-          <span id="workout-status" class="status">Not Started</span>
+      <section id="goals-card" class="card goals-card" aria-labelledby="goals-heading" hidden>
+        <div class="section-heading"><div><p class="eyebrow">YOUR TARGETS</p><h1 id="goals-heading">Goals</h1></div><button type="button" id="create-goal" class="btn primary">+ Create Goal</button></div>
+        <div id="goal-form-panel" class="goal-form-panel" hidden>
+          <form id="goal-form" class="goal-form">
+            <input id="goal-id" type="hidden" />
+            <label>Goal name<input id="goal-name" type="text" maxlength="120" placeholder="e.g. Bench press 225 lb" required /></label>
+            <label>Type<select id="goal-type" required><option value="strength">Strength</option><option value="exercise-performance">Exercise performance</option><option value="consistency">Consistency</option><option value="endurance">Endurance</option><option value="body-metric">Body metric</option><option value="custom">Custom</option></select></label>
+            <label>Current value<input id="goal-current" type="number" min="0" step="0.1" placeholder="0" required /></label>
+            <label>Target value<input id="goal-target" type="number" min="0.1" step="0.1" placeholder="100" required /></label>
+            <label>Unit<input id="goal-unit" type="text" maxlength="20" placeholder="lb, reps, days" /></label>
+            <label>Target date<input id="goal-date" type="date" /></label>
+            <div class="goal-form-actions"><button type="submit" class="btn primary">Save Goal</button><button type="button" id="cancel-goal" class="btn secondary">Cancel</button></div>
+          </form>
         </div>
+        <div class="goal-status-tabs" role="tablist" aria-label="Goal status"><button type="button" class="action-button is-active" data-goal-status="active">Active</button><button type="button" class="action-button" data-goal-status="achieved">Achieved</button><button type="button" class="action-button" data-goal-status="archived">Archived</button></div>
+        <div id="goals-list" class="goals-list"></div>
+      </section>
+      <section id="templates-card" class="card templates-card" aria-labelledby="templates-heading" hidden>
+        <div class="section-heading"><div><p class="eyebrow">WORKOUT LIBRARY</p><h1 id="templates-heading">Templates</h1></div></div>
+        <p class="templates-intro">Choose a saved template to load into the workout builder.</p>
+        <div id="templates-list" class="templates-list"></div>
+        <select id="workout-template" hidden aria-hidden="true"><option value="">Choose a saved template</option></select>
+        <div class="templates-actions"><button type="button" id="templates-back" class="btn secondary">← Back</button></div>
+      </section>
+      <section id="new-workout-card" class="card" hidden aria-labelledby="new-workout-heading">
+        <div class="builder-topbar">
+          <button type="button" id="builder-back" class="btn secondary">← Back</button>
+          <div><p class="eyebrow">WORKOUT BUILDER</p><h1 id="new-workout-heading">New Workout</h1></div>
+          <div class="builder-top-actions"><span id="builder-save-status" class="autosave-status" role="status">Draft ready</span><button type="button" id="builder-preview" class="btn secondary">Preview</button><button type="button" id="builder-save" class="btn primary">Save</button></div>
+        </div>
+        <nav class="builder-progress" aria-label="Workout builder progress">
+          <div class="builder-progress-step is-active" data-builder-step="details"><span>1</span><strong>Details</strong></div>
+          <span class="builder-progress-line" aria-hidden="true"></span>
+          <div class="builder-progress-step" data-builder-step="build"><span>2</span><strong>Build</strong></div>
+          <span class="builder-progress-line" aria-hidden="true"></span>
+          <div class="builder-progress-step" data-builder-step="review"><span>3</span><strong>Review</strong></div>
+        </nav>
         <div class="workout-info">
           <label
-            >Workout Name<input
+            ><input
               id="workout-name"
               type="text"
-              placeholder="e.g. Push Day"
+              placeholder="Workout name"
               maxlength="100"
+              aria-label="Workout title"
           /></label>
-          <label>Date<input id="workout-date" type="date" /></label>
+          <label class="workout-description-field"><span>Description <small>(optional)</small></span><textarea id="workout-description" rows="2" maxlength="500" placeholder="What is this workout for?"></textarea></label>
+          <button type="button" id="builder-details-continue" class="btn primary builder-continue">Continue →</button>
         </div>
+        <div id="builder-build-heading" class="builder-stage-heading" hidden><p class="eyebrow">BUILD WORKOUT</p><h2>Build your workout</h2><p>Add sections and exercises one focused step at a time.</p></div>
+        <section id="builder-section-setup" class="builder-section-setup" aria-labelledby="builder-section-setup-title" hidden>
+          <p id="builder-section-number" class="eyebrow">SECTION 1</p>
+          <h2 id="builder-section-setup-title">Create Section</h2>
+          <label>Section name<input id="guided-section-name" type="text" maxlength="60" placeholder="Strength" /></label>
+          <label>Format<select id="guided-section-format"><option value="sets">Sets</option><option value="rounds">Rounds</option></select></label>
+          <label id="guided-rounds-field" hidden>Number of rounds<select id="guided-section-rounds"></select></label>
+          <button type="button" id="guided-section-continue" class="btn primary">Continue →</button>
+        </section>
+        <div id="builder-exercise-heading" class="builder-exercise-heading" hidden>
+          <p id="builder-exercise-section-label" class="eyebrow">STRENGTH</p>
+          <h2 id="builder-exercise-number">Exercise 1</h2>
+          <p>Choose an exercise and add its target.</p>
+        </div>
+        <div class="builder-tools builder-section-tools" aria-label="Section templates and estimate">
+          <div class="builder-tools-heading"><p class="eyebrow">BUILD TOOLS</p><h2>Section templates</h2></div>
+          <div class="builder-template-controls">
+            <label class="template-picker">Section template<select id="section-template"><option value="">Insert saved section</option></select></label>
+          </div>
+          <span class="builder-estimate" role="status">Estimated duration updates as you build.</span>
+        </div>
+        <div id="builder-validation" class="builder-validation" role="status" aria-live="polite" hidden></div>
+        <div id="builder-guided-exercises" class="builder-guided-exercises" hidden></div>
+        <input id="workout-date" type="hidden" />
         <div id="saved-time-edit" class="saved-time-edit" hidden>
           <h2>Edit saved workout time</h2>
           <label>Completed date<select id="edit-time-date"></select></label>
@@ -154,22 +233,16 @@
               <label>Start date<input id="repeat-start" type="date" /></label>
               <label>End date (optional)<input id="repeat-end" type="date" /></label>
             </div>
-            <p class="calendar-help">The workout appears on selected days without making copies of the saved workout.</p>
           </div>
         </details>
         <section class="sections-editor" aria-labelledby="sections-editor-heading">
-          <div class="section-heading"><h2 id="sections-editor-heading">Workout Sections</h2></div>
-          <p class="calendar-help">Name each part of your workout. Exercises can be assigned to any section.</p>
+          <div class="section-heading"><div><p class="eyebrow">PROGRAM STRUCTURE</p><h2 id="sections-editor-heading">Sections</h2></div><span class="section-count" id="section-count">0 sections</span></div>
           <div id="section-list"></div>
           <div class="add-section-controls">
-            <label>New section name<input id="new-section-name" type="text" maxlength="60" placeholder="e.g. Warm Up or Cool Down" /></label>
+            <label><input id="new-section-name" type="text" maxlength="60" placeholder="New section name" /></label>
             <button id="add-section" type="button" class="btn secondary">+ Add Section</button>
           </div>
         </section>
-        <div class="section-heading">
-          <h2>Exercises</h2>
-          <span id="exercise-count">0 exercises</span>
-        </div>
         <div id="exercise-list" class="exercise-list"></div>
         <form id="exercise-form" class="exercise-form">
           <div class="section-heading full">
@@ -178,15 +251,26 @@
               Cancel edit
             </button>
           </div>
-          <label class="full">Section<select id="exercise-section"></select></label>
-          <label class="full"
-            >Exercise Name<input
-              id="exercise-name"
-              type="text"
-              placeholder="e.g. Bench Press"
-              required
-              maxlength="100"
-          /></label>
+          <label id="exercise-section-field" class="full"><select id="exercise-section" aria-label="Exercise section"></select></label>
+          <div class="full exercise-name-field">
+            <label><input id="exercise-name" type="text" placeholder="Search exercise" required maxlength="100" autocomplete="off" /></label>
+            <div id="exercise-library-picker" class="exercise-library-picker" hidden>
+              <p id="exercise-library-count" class="tracking-help" role="status"></p>
+              <div id="exercise-library-results" class="exercise-library-results" aria-label="Matching exercises"></div>
+            </div>
+            <div id="last-performance" class="last-performance" hidden></div>
+            <button type="button" id="exercise-custom-toggle" class="link-button" aria-pressed="false">Create custom exercise</button>
+          </div>
+
+          <div id="parameter-editor" class="full parameter-editor">
+            <div class="parameter-editor-heading"><div id="parameter-summary" class="parameter-summary" aria-live="polite"></div><button id="edit-parameters" type="button" class="action-button">Edit</button></div>
+            <div id="parameter-controls" class="parameter-controls" hidden>
+              <div id="parameter-list" class="parameter-list"></div>
+              <div class="parameter-add-row"><select id="parameter-add-select" aria-label="Choose parameter to add"></select><button id="add-parameter" type="button" class="action-button">+ Add Parameter</button></div>
+            </div>
+          </div>
+          <input id="target-type" type="hidden" value="reps" />
+
           <label
             >Sets<input
               id="sets"
@@ -221,22 +305,61 @@
               step="1"
               placeholder="30"
           /></label>
+          <label>Distance (mi)<input id="distance" type="number" min="0" step="0.01" placeholder="1.00" /></label>
+          <label id="calories-field">Calories<input id="calories" type="number" min="0" step="1" placeholder="300" /></label>
+          <label id="rest-field">Rest (sec)<input id="rest" type="number" min="0" max="3600" step="5" placeholder="90" /></label>
           <button id="submit" type="submit" class="btn primary full">
             + Add Exercise
           </button>
         </form>
+        <div id="builder-guided-actions" class="builder-guided-actions" hidden>
+          <button type="button" id="guided-add-section" class="btn secondary">+ Add Another Section</button>
+          <button type="button" id="guided-review" class="link-button">Review Workout →</button>
+        </div>
+        <section id="builder-review-panel" class="builder-review-panel" aria-labelledby="builder-review-title" hidden>
+          <p class="eyebrow">FINAL CHECK</p>
+          <h2 id="builder-review-title">Review Workout</h2>
+          <div id="builder-review-summary"></div>
+          <div id="builder-review-warnings" class="builder-review-warnings" hidden></div>
+          <div class="builder-review-actions">
+            <button type="button" id="builder-review-back" class="btn secondary">← Back to Build</button>
+            <button type="button" id="save-workout-template" class="btn secondary">Save as Template</button>
+            <button type="button" id="builder-review-save" class="btn primary">Save Workout</button>
+          </div>
+        </section>
+        <label class="workout-notes-field"><textarea id="workout-notes" rows="3" maxlength="2000" placeholder="Workout notes: cues, focus areas, or reminders."></textarea></label>
         <div class="workout-commit-actions">
           <button type="button" id="save-workout" class="btn secondary" hidden>Save Workout</button>
           <button type="button" id="start-workout" class="btn primary">Start Workout</button>
         </div>
+      </section>
+      <section id="workout-start-card" class="card workout-start-card" aria-labelledby="workout-start-heading" hidden>
+        <div class="section-heading"><div><p class="eyebrow">NEW WORKOUT</p><h1 id="workout-start-heading">How do you want to start?</h1></div></div>
+        <div class="workout-start-options">
+          <button type="button" id="start-blank-workout" class="btn primary">Start Blank Workout</button>
+          <button type="button" id="continue-draft-workout" class="btn secondary">Continue Draft</button>
+          <button type="button" id="use-workout-template" class="btn secondary">Use Template</button>
+        </div>
+        <p id="workout-start-status" class="builder-start-hint" role="status"></p>
       </section>
       <section id="tracking-card" class="card tracking-card" aria-labelledby="tracking-heading" hidden>
         <div class="section-heading">
           <h2 id="tracking-heading">Track Workout</h2>
           <span id="tracking-date"></span>
         </div>
+        <div id="workout-overview" class="workout-overview" hidden>
+          <p class="eyebrow">READY TO TRAIN?</p>
+          <h2 id="overview-title">Workout Overview</h2>
+          <div id="overview-summary"></div>
+          <div class="overview-actions">
+            <button type="button" id="overview-start" class="btn primary">Start Workout</button>
+            <button type="button" id="overview-cancel" class="btn secondary">Cancel</button>
+          </div>
+        </div>
+        <div id="tracking-live">
         <div id="session-timer" class="session-timer" role="timer" aria-label="Elapsed workout time">
           <span id="timer-label">Elapsed</span><strong id="elapsed-time">00:00:00</strong>
+          <button type="button" id="player-pause" class="player-pause-button" hidden>Pause Workout</button>
         </div>
         <div id="timer-edit" class="timer-edit" hidden>
           <label>Set workout time (mm:ss)<input id="edit-elapsed" type="text" inputmode="numeric" pattern="[0-9]+:[0-5][0-9]" placeholder="01:30" /></label>
@@ -252,9 +375,20 @@
           </div>
           <small>Stopwatch readings are not saved.</small>
         </div>
-        <p class="tracking-help">Record what you did for each exercise. Leave a field empty if you did not track it.</p>
+        <div class="rest-timer" aria-label="Rest timer">
+          <div><span>Rest Timer</span><strong id="rest-time">01:30</strong></div>
+          <div class="rest-timer-controls">
+            <label>Seconds<input id="rest-duration" type="number" min="5" max="3600" step="5" value="90" /></label>
+            <button type="button" id="rest-start" class="action-button">Start</button>
+            <button type="button" id="rest-stop" class="action-button" disabled>Stop</button>
+            <button type="button" id="rest-reset" class="action-button">Reset</button>
+          </div>
+          <small>Use it between sets. It stops automatically at zero.</small>
+        </div>
         <div id="tracking-list"></div>
+        <label class="workout-notes-field">Session Notes<textarea id="workout-session-notes" rows="3" maxlength="2000" placeholder="How did it feel? Record pain, energy, technique, or equipment notes."></textarea></label>
         <button type="button" id="tracking-finish" class="btn primary tracking-finish">Finish Workout</button>
+        </div>
       </section>
       <section class="card calendar-card" aria-labelledby="calendar-heading">
         <div class="section-heading calendar-heading">
@@ -291,5 +425,7 @@
       </div>
     </main>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="exercise.js"></script>
+    <script src="script.js" defer></script>
   </body>
 </html>
