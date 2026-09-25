@@ -20,9 +20,9 @@ Forge/
 
 1. Apply `supabase/migrations/202609250001_create_forge_user_state.sql` to the connected Supabase project. The Supabase GitHub integration can apply it through its normal migration workflow, or it can be pasted into the Supabase SQL editor once.
 2. In Supabase, keep the Email authentication provider enabled.
-3. Add the deployed Forge URL to **Authentication → URL Configuration → Redirect URLs**. Magic-link sign-in returns users to this URL.
+3. Add `https://josh-grimes.github.io/Forge/` to **Authentication → URL Configuration → Redirect URLs**. Magic-link sign-in returns users to this URL.
 4. Open `supabase-config.js` and replace the two placeholders with the project's URL and publishable key from **Project Settings → API**.
-5. Host the repository root with any static host, such as GitHub Pages. `index.html` is the app entry point.
+5. Merge the pull request. The included GitHub Actions workflow deploys the repository root to `https://josh-grimes.github.io/Forge/`, with `index.html` as the app entry point.
 
 The publishable key is intended for browser use. User data is protected by the Row Level Security policies in the migration; never put a Supabase service-role key in this repository.
 
