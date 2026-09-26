@@ -29,7 +29,7 @@ The publishable key is intended for browser use. User data is protected by the R
 ## Data behavior
 
 - Forge remains usable from browser storage while signed out or temporarily offline.
-- Selecting the sync status in the header sends an email magic link for sign-in.
+- Selecting the sync status in Settings sends an email magic link for sign-in.
 - The first sign-in uploads existing browser data when the account has no cloud state.
 - Workouts, schedules, results, profile and weight data, goals, personal records, templates, drafts, favorites, and recents are included in cloud sync and exports.
 - Saves use optimistic version checks so one device cannot silently overwrite a newer save from another device.
@@ -43,3 +43,4 @@ The publishable key is intended for browser use. User data is protected by the R
 - Timers, per-set results, notes, and completed sessions
 - Goals, personal records, progress charts, weight tracking, and streaks
 - Local JSON backup/export and authenticated Supabase synchronization
+- Responsive sidebar navigation, light/dark/system themes, and persisted measurement preferences
