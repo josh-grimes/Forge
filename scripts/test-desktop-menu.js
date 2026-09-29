@@ -5,8 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-const css = fs.readFileSync(path.join(root, "ui-components.css"), "utf8");
+const html = `${fs.readFileSync(path.join(root, "index.html"), "utf8")}\n${fs.readFileSync(path.join(root, "js", "app.js"), "utf8")}`;
+const css = fs.readFileSync(path.join(root, "css", "ui-components.css"), "utf8");
 
 assert.match(html, /<header[^>]*class="site-header"[\s\S]*?id="toggle-menu"[\s\S]*?<\/header>/);
 assert.match(html, /<nav[^>]*id="primary-nav"[\s\S]*?class="sidebar-brand"[\s\S]*?id="close-menu"/);
@@ -15,12 +15,12 @@ assert.match(css, /body:not\(\.sidebar-closed\) #toggle-menu\s*\{\s*display:\s*n
 assert.match(css, /\.sidebar-closed \.sidebar-close-button\s*\{\s*display:\s*none/);
 
 assert.match(html, /<legend>Menu Position<\/legend>/);
-assert.match(html, /name="menu-position" value="left"/);
-assert.match(html, /name="menu-position" value="right"/);
+assert.match(html, /name="menu-position"\s+value="left"/);
+assert.match(html, /name="menu-position"\s+value="right"/);
 assert.match(html, /menuPosition:\s*"left"/);
 assert.match(html, /name="menu-position"\]:checked/);
 assert.match(html, /document\.documentElement\.dataset\.menuPosition/);
-assert.match(html, /localStorage\.setItem\(SETTINGS_KEY, JSON\.stringify\(forgeSettings\)\)/);
+assert.match(html, /window\.forgeStorage\.setItem\(SETTINGS_KEY, JSON\.stringify\(forgeSettings\)\)/);
 
 const desktopStart = css.indexOf("@media (min-width: 1025px)");
 const mobileStart = css.indexOf("@media (max-width: 1024px)");
@@ -35,8 +35,8 @@ assert.match(desktopCss, /data-menu-position="right"\] \.sidebar-brand[\s\S]*?ro
 assert.doesNotMatch(mobileCss, /data-menu-position/, "desktop side preference must not alter mobile navigation");
 assert.match(mobileCss, /\.sidebar-close-button\s*\{\s*display:\s*none/);
 
-assert.match(html, /\$\("close-menu"\)\.addEventListener\("click", \(\) => \{ setHeaderMenu\(false\); \$\("toggle-menu"\)\.focus\(\); \}\)/);
-assert.match(html, /localStorage\.setItem\("forge-sidebar-open", String\(open\)\)/);
+assert.match(html, /\$\("close-menu"\)\.addEventListener\([\s\S]*?setHeaderMenu\(false\)[\s\S]*?\$\("toggle-menu"\)\.focus\(\)/);
+assert.match(html, /window\.forgeStorage\.setItem\("forge-sidebar-open", String\(open\)\)/);
 assert.match(html, /desktopMenuQuery\.addEventListener/);
 assert.match(css, /\.primary-nav[\s\S]*?transition:\s*transform 180ms ease/);
 assert.match(css, /\.site-header[\s\S]*?transition:\s*margin 180ms ease/);

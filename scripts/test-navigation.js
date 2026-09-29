@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const assert = require("node:assert/strict");
-const { createNavigationState, primaryRouteForView } = require("../navigation-state.js");
+const { createNavigationState, primaryRouteForView } = require("../js/navigation-state.js");
 
 const viewFlags = [
   "editorOpen",

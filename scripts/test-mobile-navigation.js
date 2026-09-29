@@ -5,8 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
-const css = fs.readFileSync(path.join(root, "ui-components.css"), "utf8");
+const html = `${fs.readFileSync(path.join(root, "index.html"), "utf8")}\n${fs.readFileSync(path.join(root, "js", "app.js"), "utf8")}`;
+const css = fs.readFileSync(path.join(root, "css", "ui-components.css"), "utf8");
 
 const mobileNav = html.match(/<nav id="mobile-nav"[\s\S]*?<\/nav>/)?.[0] || "";
 assert.ok(mobileNav, "mobile navigation must exist");
@@ -21,8 +21,8 @@ for (const [route, label] of [["library", "Search"], ["profile", "Profile"], ["s
   assert.match(moreMenu, new RegExp(`data-mobile-more-route="${route}"[\\s\\S]*?<span>${label}</span>`));
 }
 
-assert.match(html, /document\.querySelectorAll\("\[data-mobile-route\]"\)[\s\S]*?openPrimaryRoute\(button\.dataset\.mobileRoute\)/);
-assert.match(html, /document\.querySelectorAll\("\[data-mobile-more-route\]"\)[\s\S]*?openPrimaryRoute\(button\.dataset\.mobileMoreRoute\)/);
+assert.match(html, /document\s*\.querySelectorAll\("\[data-mobile-route\]"\)[\s\S]*?openPrimaryRoute\(button\.dataset\.mobileRoute\)/);
+assert.match(html, /document\s*\.querySelectorAll\("\[data-mobile-more-route\]"\)[\s\S]*?openPrimaryRoute\(button\.dataset\.mobileMoreRoute\)/);
 assert.match(html, /const moreRoutes = new Set\(\["library", "profile", "settings"\]\)/);
 assert.match(html, /mobile-more-toggle[\s\S]*?moreRoutes\.has\(currentRoute\)/);
 assert.match(html, /if \(sessionOpen\) setMobileMoreMenu\(false\)/);

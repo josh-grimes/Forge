@@ -6,8 +6,17 @@ Forge is a static web app backed by Supabase. Google Apps Script and Google Shee
 
 ```text
 Forge/
-├── index.html                         # Current Forge app
-├── supabase-config.js                 # Browser-safe Supabase connection values
+├── index.html                         # App markup and entry point
+├── css/
+│   ├── styles.css                     # Main Forge styles and theme tokens
+│   └── ui-components.css              # Shared UI component styles
+├── js/
+│   ├── bootstrap.js                   # Early theme/menu preference bootstrap
+│   ├── exercises.js                   # Exercise library
+│   ├── forge-storage.js                # Session adapter; Supabase is persistent storage
+│   ├── app.js                         # Main Forge application logic
+│   ├── navigation-state.js            # Navigation state helpers
+│   └── supabase-config.js             # Browser-safe Supabase connection values
 ├── supabase/
 │   └── migrations/                    # Database schema and RLS policies
 └── local/
@@ -28,9 +37,9 @@ The publishable key is intended for browser use. User data is protected by the R
 
 ## Data behavior
 
-- Forge remains usable from browser storage while signed out or temporarily offline.
+- Forge keeps only temporary in-memory state while signed out; Supabase is the persistent data store.
 - Selecting the sync status in Settings sends an email magic link for sign-in.
-- The first sign-in uploads existing browser data when the account has no cloud state.
+- The first sign-in uploads the current session state when the account has no cloud state.
 - Workouts, schedules, results, profile and weight data, goals, personal records, templates, drafts, favorites, and recents are included in cloud sync and exports.
 - Saves use optimistic version checks so one device cannot silently overwrite a newer save from another device.
 
@@ -42,5 +51,5 @@ The publishable key is intended for browser use. User data is protected by the R
 - Exercise library and custom exercises
 - Timers, per-set results, notes, and completed sessions
 - Goals, personal records, progress charts, weight tracking, and streaks
-- Local JSON backup/export and authenticated Supabase synchronization
+- JSON backup/export and authenticated Supabase synchronization
 - Responsive sidebar navigation, light/dark/system themes, and persisted measurement preferences

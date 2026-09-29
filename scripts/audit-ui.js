@@ -5,9 +5,12 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const htmlPath = path.join(root, "index.html");
-const cssPath = path.join(root, "ui-components.css");
-const html = fs.readFileSync(htmlPath, "utf8");
-const css = fs.readFileSync(cssPath, "utf8");
+const cssPath = path.join(root, "css", "ui-components.css");
+const stylesPath = path.join(root, "css", "styles.css");
+const markup = fs.readFileSync(htmlPath, "utf8");
+const css = `${fs.readFileSync(stylesPath, "utf8")}\n${fs.readFileSync(cssPath, "utf8")}`;
+const app = fs.readFileSync(path.join(root, "js", "app.js"), "utf8");
+const html = `${markup}\n${css}\n${app}`;
 const failures = [];
 const checks = [];
 
@@ -40,14 +43,22 @@ check("five-item mobile navigation", /id=["']mobile-nav["']/.test(html) && (html
 check("mobile More destinations", ["library", "profile", "settings"].every((route) => new RegExp(`data-mobile-more-route=["']${route}["']`).test(html)));
 check("mobile Forge action", /class=["'][^"']*mobile-nav-forge[^"']*["'][^>]*data-mobile-route=["']forge["']/.test(html));
 check("profile excludes training goals", !/profile-fitnessGoal|profile-experienceLevel|profile-goal[123]/.test(html));
-check("persisted settings", /const SETTINGS_KEY = ["']forge-settings["']/.test(html) && /localStorage\.setItem\(SETTINGS_KEY/.test(html));
+check("session settings", /const SETTINGS_KEY = ["']forge-settings["']/.test(html) && /window\.forgeStorage\.setItem\(SETTINGS_KEY/.test(html));
 check("library tab controls", /id=["']library-templates-tab["'][^>]*aria-controls=["']library-templates-panel["']/.test(html) && /id=["']library-exercises-tab["'][^>]*aria-controls=["']library-exercises-panel["']/.test(html));
 check("library tab selection state", /id=["']library-templates-tab["'][^>]*aria-selected=["']true["'][^>]*tabindex=["']0["']/.test(html) && /id=["']library-exercises-tab["'][^>]*aria-selected=["']false["'][^>]*tabindex=["']-1["']/.test(html));
 check("reduced motion styles", /prefers-reduced-motion:\s*reduce/.test(css));
 check("forced colors styles", /forced-colors:\s*active/.test(css));
 check("overflow protection", /html,\s*\nbody\s*\{[\s\S]*?overflow-x:\s*hidden/.test(css));
+check(
+  "Supabase-backed application storage",
+  /js\/forge-storage\.js/.test(markup) && !/\blocalStorage\b/.test(app),
+);
 
-const scripts = inlineScripts(html);
+const scripts = [
+  fs.readFileSync(path.join(root, "js", "bootstrap.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "exercises.js"), "utf8"),
+  app,
+];
 scripts.forEach((source, index) => {
   try {
     new Function(source);
