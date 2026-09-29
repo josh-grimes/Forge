@@ -17,12 +17,13 @@ Forge/
 │   ├── app.js                         # Main Forge application logic
 │   ├── navigation-state.js            # Navigation state helpers
 │   └── supabase-config.js             # Browser-safe Supabase connection values
+├── assets/
+│   ├── logos/                         # Dark and light Forge logos
+│   ├── icons/                         # Dark and light Forge icons
+│   └── reference/                     # Preserved design reference assets
 ├── supabase/
 │   └── migrations/                    # Database schema and RLS policies
-└── local/
-    ├── forge-logo.png
-    ├── forge-icon.png
-    └── ...                            # Previous local-only build and source assets
+└── scripts/                           # Validation and regression checks
 ```
 
 ## Supabase setup
@@ -30,7 +31,7 @@ Forge/
 1. Apply `supabase/migrations/202609250001_create_forge_user_state.sql` to the connected Supabase project. The Supabase GitHub integration can apply it through its normal migration workflow, or it can be pasted into the Supabase SQL editor once.
 2. In Supabase, keep the Email authentication provider enabled.
 3. Add `https://josh-grimes.github.io/Forge/` to **Authentication → URL Configuration → Redirect URLs**. Magic-link sign-in returns users to this URL.
-4. Open `supabase-config.js` and replace the two placeholders with the project's URL and publishable key from **Project Settings → API**.
+4. Open `js/supabase-config.js` and replace the two placeholders with the project's URL and publishable key from **Project Settings → API**.
 5. Merge the pull request. The included GitHub Actions workflow deploys the repository root to `https://josh-grimes.github.io/Forge/`, with `index.html` as the app entry point.
 
 The publishable key is intended for browser use. User data is protected by the Row Level Security policies in the migration; never put a Supabase service-role key in this repository.

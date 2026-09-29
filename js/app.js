@@ -7271,11 +7271,11 @@
       function updateForgeBranding() {
         const light = resolvedForgeTheme() === "light";
         const logoPath = light
-          ? "local/forge-logo-blue.png"
-          : "local/forge-logo.png";
+          ? "assets/logos/forge-logo-blue.png"
+          : "assets/logos/forge-logo.png";
         const faviconPath = light
-          ? "local/forge-icon-blue.png"
-          : "local/forge-icon.png";
+          ? "assets/icons/forge-icon-blue.png"
+          : "assets/icons/forge-icon.png";
         if ($("forge-logo").getAttribute("src") !== logoPath)
           $("forge-logo").setAttribute("src", logoPath);
         if ($("forge-favicon").getAttribute("href") !== faviconPath)
@@ -8168,7 +8168,7 @@
       async function cloudAccountAction_() {
         if (!cloudClient) {
           alert(
-            "Add your Supabase project URL and publishable key to supabase-config.js, then reload Forge.",
+            "Add your Supabase project URL and publishable key to js/supabase-config.js, then reload Forge.",
           );
           return;
         }

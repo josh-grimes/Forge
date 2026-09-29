@@ -18,15 +18,15 @@ function contrast(foreground, background) {
   return (light + 0.05) / (dark + 0.05);
 }
 
-for (const asset of ["local/forge-logo.png", "local/forge-icon.png", "local/forge-logo-blue.png", "local/forge-icon-blue.png"]) {
+for (const asset of ["assets/logos/forge-logo.png", "assets/icons/forge-icon.png", "assets/logos/forge-logo-blue.png", "assets/icons/forge-icon-blue.png"]) {
   const bytes = fs.readFileSync(path.join(root, asset));
   assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${asset} must be a valid PNG asset`);
 }
 
-assert.match(html, /id="forge-logo"[^>]+src="local\/forge-logo\.png"/);
-assert.match(html, /id="forge-favicon"[^>]+href="local\/forge-icon\.png"/);
-assert.match(html, /light\s*\?\s*"local\/forge-logo-blue\.png"\s*:\s*"local\/forge-logo\.png"/);
-assert.match(html, /light\s*\?\s*"local\/forge-icon-blue\.png"\s*:\s*"local\/forge-icon\.png"/);
+assert.match(html, /id="forge-logo"[^>]+src="assets\/logos\/forge-logo\.png"/);
+assert.match(html, /id="forge-favicon"[^>]+href="assets\/icons\/forge-icon\.png"/);
+assert.match(html, /light\s*\?\s*"assets\/logos\/forge-logo-blue\.png"\s*:\s*"assets\/logos\/forge-logo\.png"/);
+assert.match(html, /light\s*\?\s*"assets\/icons\/forge-icon-blue\.png"\s*:\s*"assets\/icons\/forge-icon\.png"/);
 assert.match(html, /function resolvedForgeTheme\(\)[\s\S]*?prefers-color-scheme: light/);
 assert.match(html, /function applyForgeTheme\(\)[\s\S]*?updateForgeBranding\(\)/);
 
