@@ -124,6 +124,31 @@
 * {
   box-sizing: border-box;
 }
+
+#auth-bootstrap {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+#auth-bootstrap[hidden] {
+  display: none;
+}
+
+html[data-account-bootstrap] .site-header,
+html[data-account-bootstrap] .primary-nav,
+html[data-account-bootstrap] #main-content,
+html[data-account-bootstrap] #mobile-nav,
+html[data-account-bootstrap] #mobile-more-menu {
+  visibility: hidden;
+}
 body {
   margin: 0;
   min-height: 100vh;
@@ -193,6 +218,20 @@ input[type="number"],
   background: var(--surface-light);
   color: var(--text);
   border: 1px solid var(--border);
+}
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+.account-password-login {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.account-password-login .header-buttons {
+  align-items: center;
 }
 
 button:disabled {
@@ -3705,6 +3744,10 @@ summary {
   .today-entry .workout-actions .btn {
     flex: 1 1 110px;
   }
+  .today-entry .workout-actions .today-start,
+  .saved-workout .workout-actions .saved-start {
+    flex-basis: 100%;
+  }
   .advanced-schedule,
   .sections-editor {
     padding: 12px;
@@ -4236,6 +4279,70 @@ button:disabled {
 }
 
 /* Chunk 6 polish: consistent motion, feedback, and compact mobile controls. */
+.forge-dialog-root {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px
+    max(16px, env(safe-area-inset-bottom));
+  background: rgb(0 0 0 / 58%);
+}
+.forge-dialog-root[hidden] {
+  display: none;
+}
+body.forge-dialog-open {
+  overflow: hidden;
+}
+.forge-dialog-panel {
+  width: min(100%, 440px);
+  max-height: min(90dvh, 640px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 60px rgb(0 0 0 / 35%);
+}
+.forge-dialog-panel h2 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+.forge-dialog-message {
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.forge-dialog-input {
+  width: 100%;
+  margin-top: 16px;
+}
+.forge-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+.forge-dialog-actions .btn {
+  min-height: 44px;
+}
+@media (max-width: 420px) {
+  .forge-dialog-panel {
+    padding: 18px;
+    border-radius: 12px;
+  }
+  .forge-dialog-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .forge-dialog-actions .btn {
+    width: 100%;
+  }
+}
 @keyframes forge-rise-in {
   from {
     opacity: 0;

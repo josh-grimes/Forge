@@ -1,0 +1,17 @@
+{
+  "name": "forge-workout-tracker",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Forge workout tracker",
+  "scripts": {
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node scripts/test-all.js",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:integration": "node scripts/test-supabase-auth.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@supabase/supabase-js": "^2.57.4"
+  }
+}

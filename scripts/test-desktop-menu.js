@@ -6,10 +6,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const html = `${fs.readFileSync(path.join(root, "index.html"), "utf8")}\n${fs.readFileSync(path.join(root, "js", "app.js"), "utf8")}`;
-const css = fs.readFileSync(
-  path.join(root, "css", "ui-components.css"),
-  "utf8",
-);
+const css = `${fs.readFileSync(path.join(root, "css", "styles.css"), "utf8")}\n${fs.readFileSync(path.join(root, "css", "ui-components.css"), "utf8")}`;
 
 assert.match(
   html,
@@ -91,7 +88,7 @@ assert.match(css, /\.primary-nav[\s\S]*?transition:\s*transform 180ms ease/);
 assert.match(css, /\.site-header[\s\S]*?transition:\s*margin 180ms ease/);
 assert.match(
   css,
-  /main[\s\S]*?transition:\s*width 180ms ease, margin 180ms ease/,
+  /main[\s\S]*?transition:\s*width 180ms ease,\s*margin 180ms ease/,
 );
 
 console.log(

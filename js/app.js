@@ -86,6 +86,12 @@ let weightOpen = false;
 let savedView = "detailed";
 let restDays = [];
 let visibleMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+const { completedDates, removeDateEntry: removeWorkoutDateEntry } =
+  ForgeWorkoutState;
+const { dateString, scheduledDates, matchesWeeklyRule, scheduledOn } =
+  ForgeWorkoutRules;
+const { normalizeUsername, isValidUsername } = ForgeAccountRules;
+const { isVersionConflict } = ForgeSyncRules;
 
 function setActiveMainView(view) {
   const state = ForgeNavigation.createNavigationState(view);
@@ -1208,14 +1214,14 @@ function renderLibraryExercises() {
       ),
     );
 }
-function loadTemplateFromScreen(id) {
+async function loadTemplateFromScreen(id) {
   const template = readTemplates(WORKOUT_TEMPLATES_KEY).find(
     (item) => item.id === id,
   );
   if (!template) return;
   if (
     readBuilderDraft() &&
-    !confirm("Replace the current draft with this template?")
+    !(await ForgeDialogs.confirm("Replace the current draft with this template?"))
   )
     return;
   clearBuilderDraft();
@@ -1236,10 +1242,10 @@ function loadTemplateFromScreen(id) {
   setWorkoutState("not-started");
   notify(`${template.name} loaded.`);
 }
-function startBlankBuilder() {
+async function startBlankBuilder() {
   if (
     readBuilderDraft() &&
-    !confirm("Start a blank workout and replace the current draft?")
+    !(await ForgeDialogs.confirm("Start a blank workout and replace the current draft?"))
   )
     return;
   clearBuilderDraft();
@@ -1312,7 +1318,7 @@ function resumeActiveWorkout() {
   trackingCard.scrollIntoView({ behavior: "smooth", block: "start" });
   notify(`${session.name || "Workout"} resumed`);
 }
-function saveWorkoutAsTemplate() {
+async function saveWorkoutAsTemplate() {
   if (!workoutNameInput.value.trim()) {
     workoutNameInput.focus();
     notify("Name the workout before saving it as a template.");
@@ -1322,7 +1328,9 @@ function saveWorkoutAsTemplate() {
     notify("Add at least one exercise before saving a template.");
     return;
   }
-  const name = prompt("Template name", workoutNameInput.value.trim())?.trim();
+  const name = (
+    await ForgeDialogs.prompt("Template name", workoutNameInput.value.trim())
+  )?.trim();
   if (!name) return;
   const templates = readTemplates(WORKOUT_TEMPLATES_KEY);
   const template = {
@@ -1347,14 +1355,14 @@ function saveWorkoutAsTemplate() {
   $("workout-template").value = template.id;
   notify(`${name} saved as a template.`);
 }
-function applyWorkoutTemplate(id) {
+async function applyWorkoutTemplate(id) {
   const template = readTemplates(WORKOUT_TEMPLATES_KEY).find(
     (item) => item.id === id,
   );
   if (!template) return;
   if (
     (workoutNameInput.value.trim() || exercises.length) &&
-    !confirm("Replace the current workout with this template?")
+    !(await ForgeDialogs.confirm("Replace the current workout with this template?"))
   ) {
     $("workout-template").value = "";
     return;
@@ -1371,8 +1379,8 @@ function applyWorkoutTemplate(id) {
   renderExercises();
   notify(`${template.name} loaded.`);
 }
-function saveSectionAsTemplate(section, entries) {
-  const name = prompt("Section template name", section.name)?.trim();
+async function saveSectionAsTemplate(section, entries) {
+  const name = (await ForgeDialogs.prompt("Section template name", section.name))?.trim();
   if (!name) return;
   const templates = readTemplates(SECTION_TEMPLATES_KEY);
   const template = {
@@ -1795,14 +1803,14 @@ function buildSectionCard(section, entries) {
   const menuAction = (label, handler, danger = false) => {
     const button = element("button", danger ? "delete" : "", label);
     button.type = "button";
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       menu.open = false;
-      handler();
+      await handler();
     });
     panel.append(button);
   };
-  menuAction("Rename", () => {
-    const name = prompt("Section name", section.name)?.trim();
+  menuAction("Rename", async () => {
+    const name = (await ForgeDialogs.prompt("Section name", section.name))?.trim();
     if (name) {
       pushBuilderHistory();
       section.name = name;
@@ -2012,9 +2020,9 @@ function editExercise(index) {
   updateExerciseFields();
   updateExerciseSectionFields();
 }
-function deleteExercise(index) {
+async function deleteExercise(index) {
   const exercise = exercises[index];
-  if (!exercise || !confirm(`Delete ${exercise.name}?`)) return;
+  if (!exercise || !(await ForgeDialogs.confirm(`Delete ${exercise.name}?`))) return;
   pushBuilderHistory();
   exercises.splice(index, 1);
   if (editingIndex === index) resetExerciseForm();
@@ -2045,14 +2053,14 @@ function replaceExercise(index) {
   renderExerciseLibraryResults();
   nameInput.focus();
 }
-function moveExerciseToSection(index) {
+async function moveExerciseToSection(index) {
   const exercise = exercises[index];
   if (!exercise) return;
   const choices = sections
     .map((section, item) => `${item + 1}. ${section.name}`)
     .join("\n");
   const selected = Number(
-    prompt(
+    await ForgeDialogs.prompt(
       `Move ${exercise.name} to:\n${choices}`,
       String(
         sections.findIndex(
@@ -3290,6 +3298,9 @@ function recordPersonalRecords(
 }
 function backfillPRHistory() {
   if (readPRHistory().length) return;
+  rebuildPRHistoryFromWorkouts();
+}
+function rebuildPRHistoryFromWorkouts() {
   const records = [];
   savedWorkouts
     .slice()
@@ -4220,8 +4231,11 @@ function advancePlayer() {
   enterPlayerRestOrNext();
 }
 
-function endPlayerEarly() {
-  if (!session?.player || !confirm("End this workout and review your results?"))
+async function endPlayerEarly() {
+  if (
+    !session?.player ||
+    !(await ForgeDialogs.confirm("End this workout and review your results?"))
+  )
     return;
   clearPlayerPhaseTimer();
   session.elapsedOffsetSeconds = stopTimer();
@@ -4770,6 +4784,14 @@ function startSavedWorkout(id, date) {
     workout.notesByDate?.[date] ?? workout.notes ?? "";
 }
 
+function attachWorkoutStartButton_(button, workout, getDate) {
+  button.dataset.workoutId = workout.id;
+  button.setAttribute("aria-label", `Start ${workout.name}`);
+  button.addEventListener("click", () =>
+    startSavedWorkout(button.dataset.workoutId, getDate()),
+  );
+}
+
 function recordSavedWorkout(id, date) {
   if (workoutState !== "not-started") {
     notify("Finish or save the current workout first.");
@@ -4876,7 +4898,7 @@ function resetWorkout() {
   renderExercises();
 }
 
-function beginEditWorkout(id) {
+async function beginEditWorkout(id) {
   if (workoutState !== "not-started") {
     notify("Finish or save the current workout first.");
     return;
@@ -4885,7 +4907,7 @@ function beginEditWorkout(id) {
   if (!workout) return;
   if (
     (workoutNameInput.value.trim() || exercises.length) &&
-    !confirm("Replace the unsaved workout currently in the editor?")
+    !(await ForgeDialogs.confirm("Replace the unsaved workout currently in the editor?"))
   )
     return;
   editingWorkoutId = id;
@@ -5378,45 +5400,19 @@ function reviewWorkout(id) {
   }
 }
 
-function deleteWorkout(id) {
+async function deleteWorkout(id) {
   const workout = savedWorkouts.find((item) => item.id === id);
-  if (!workout || !confirm(`Delete saved workout "${workout.name}"?`)) return;
+  if (
+    !workout ||
+    !(await ForgeDialogs.confirm(`Delete saved workout "${workout.name}"?`, { danger: true }))
+  )
+    return;
   if (!persistHistory(savedWorkouts.filter((item) => item.id !== id))) return;
+  rebuildPRHistoryFromWorkouts();
   renderWorkoutHistory();
   renderCalendar();
   renderStreaks();
   notify(`${workout.name} deleted`);
-}
-
-function dateString(year, month, day) {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function scheduledDates(workout) {
-  return Array.isArray(workout.scheduledDates)
-    ? workout.scheduledDates
-    : [workout.date];
-}
-
-function matchesWeeklyRule(workout, date) {
-  const rule = workout.recurrence;
-  if (
-    !rule ||
-    !Array.isArray(rule.weekdays) ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(date)
-  )
-    return false;
-  if (date < rule.startDate || (rule.endDate && date > rule.endDate))
-    return false;
-  return rule.weekdays.includes(new Date(`${date}T12:00:00`).getDay());
-}
-
-function scheduledOn(workout, date) {
-  return (
-    scheduledDates(workout).includes(date) ||
-    (matchesWeeklyRule(workout, date) &&
-      !(workout.recurrence.exceptions ?? []).includes(date))
-  );
 }
 
 function repeatDescription(workout) {
@@ -5523,14 +5519,6 @@ function recurrenceEditor(workout) {
   return box;
 }
 
-function completedDates(workout) {
-  return Array.isArray(workout.completedDates)
-    ? workout.completedDates
-    : workout.completed === false
-      ? []
-      : [workout.date];
-}
-
 function renderStreaks() {
   const today = todayLocal();
   const activity = [
@@ -5622,9 +5610,24 @@ function toggleCompleted(id, date, done) {
     if (workout.id !== id) return workout;
     const dates = completedDates(workout).filter((day) => day !== date);
     if (done) dates.push(date);
-    return { ...workout, completedDates: dates };
+    const updated = { ...workout, completedDates: dates };
+    if (!done) {
+      updated.actualLogs = removeWorkoutDateEntry(updated.actualLogs, date);
+      updated.notesByDate = removeWorkoutDateEntry(updated.notesByDate, date);
+      updated.progressRecordsByDate = removeWorkoutDateEntry(
+        updated.progressRecordsByDate,
+        date,
+      );
+      updated.loggedExercisesByDate = removeWorkoutDateEntry(
+        updated.loggedExercisesByDate,
+        date,
+      );
+      updated.elapsedByDate = removeWorkoutDateEntry(updated.elapsedByDate, date);
+    }
+    return updated;
   });
   if (!persistHistory(next)) return;
+  if (!done) rebuildPRHistoryFromWorkouts();
   renderWorkoutHistory();
   if (wasOpen) reviewWorkout(id);
   renderCalendar();
@@ -5677,6 +5680,17 @@ function removeScheduledDate(id, date) {
           ...item,
           scheduledDates: scheduledDates(item).filter((day) => day !== date),
           completedDates: completedDates(item).filter((day) => day !== date),
+          actualLogs: removeWorkoutDateEntry(item.actualLogs, date),
+          notesByDate: removeWorkoutDateEntry(item.notesByDate, date),
+          progressRecordsByDate: removeWorkoutDateEntry(
+            item.progressRecordsByDate,
+            date,
+          ),
+          loggedExercisesByDate: removeWorkoutDateEntry(
+            item.loggedExercisesByDate,
+            date,
+          ),
+          elapsedByDate: removeWorkoutDateEntry(item.elapsedByDate, date),
           recurrence: matchesWeeklyRule(item, date)
             ? {
                 ...item.recurrence,
@@ -5689,6 +5703,7 @@ function removeScheduledDate(id, date) {
       : item,
   );
   if (!persistHistory(next)) return;
+  rebuildPRHistoryFromWorkouts();
   renderWorkoutHistory();
   renderCalendar();
   renderStreaks();
@@ -5885,7 +5900,7 @@ function renderCalendar() {
       const controls = element("div", "calendar-popup-actions");
       const play = element("button", "action-button", "Start Workout");
       play.type = "button";
-      play.addEventListener("click", () => startSavedWorkout(workout.id, date));
+      attachWorkoutStartButton_(play, workout, () => date);
       controls.append(play);
       const complete = element(
         "button",
@@ -6105,9 +6120,7 @@ function renderWorkoutHistory() {
     edit.addEventListener("click", () => beginEditWorkout(workout.id));
     const start = element("button", "btn primary saved-start", "Start");
     start.type = "button";
-    start.addEventListener("click", () =>
-      startSavedWorkout(workout.id, todayLocal()),
-    );
+    attachWorkoutStartButton_(start, workout, todayLocal);
     const review = element("button", "action-button", "Review");
     review.type = "button";
     review.id = `review-${workout.id}`;
@@ -6143,9 +6156,7 @@ function renderWorkoutHistory() {
       "Start & Track",
     );
     track.type = "button";
-    track.addEventListener("click", () =>
-      startSavedWorkout(workout.id, dateInput.value),
-    );
+    attachWorkoutStartButton_(track, workout, () => dateInput.value);
     details.append(track);
     const dates = element("div", "scheduled-dates");
     for (const date of [
@@ -6337,7 +6348,7 @@ function renderTodayWorkout() {
     );
     const start = element("button", "btn primary today-start", "Start Workout");
     start.type = "button";
-    start.addEventListener("click", () => startSavedWorkout(workout.id, date));
+    attachWorkoutStartButton_(start, workout, () => date);
     actions.append(start, complete);
     if (done) {
       const record = element(
@@ -6572,8 +6583,8 @@ function renderBodyWeight() {
     });
     const remove = element("button", "btn secondary", "Delete");
     remove.type = "button";
-    remove.addEventListener("click", () => {
-      if (confirm(`Delete weigh-in for ${item.date}?`))
+    remove.addEventListener("click", async () => {
+      if (await ForgeDialogs.confirm(`Delete weigh-in for ${item.date}?`, { danger: true }))
         saveBodyWeightEntries(
           bodyWeightEntries().filter((e) => e.date !== item.date),
         );
@@ -6746,7 +6757,7 @@ $("profile-photo-input").addEventListener("change", async (event) => {
 $("remove-profile-photo").addEventListener("click", () => saveProfilePhoto(""));
 
 const PROFILE_KEY = "forge-profile";
-const PROFILE_FIELDS = ["name", "sex", "age", "email"];
+const PROFILE_FIELDS = ["name", "sex", "age", "email", "username"];
 let profile = {};
 function renderGoalTracking() {
   const list = $("goal-progress-list");
@@ -6828,17 +6839,61 @@ function loadProfile() {
   }
   displayProfile();
 }
+async function syncAccountIdentity_(next) {
+  if (!cloudUser || !cloudReady || !cloudClient) return true;
+  const { error } = await cloudClient.from("forge_user_profiles").upsert(
+    {
+      user_id: cloudUser.id,
+      username: next.username,
+      recovery_email: next.email,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  if (!error) return true;
+  if (error.code === "23505") {
+    $("profile-save-status").textContent =
+      "That username is already taken. Choose another.";
+    $("profile-save-status").dataset.state = "error";
+    return false;
+  }
+  console.error("Unable to sync account identity:", error);
+  notify("Username saved locally; account identity sync is pending.");
+  return true;
+}
 $("profile-form").addEventListener("input", () => {
   $("profile-save-status").textContent =
     "Unsaved changes — select Save Profile.";
   $("profile-save-status").dataset.state = "dirty";
 });
-$("profile-form").addEventListener("submit", (event) => {
+$("profile-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!event.currentTarget.reportValidity()) return;
   const next = { ...profile };
   for (const key of PROFILE_FIELDS)
     next[key] = $("profile-" + key).value.trim();
+  next.username = normalizeUsername(next.username);
+  if (next.username && !isValidUsername(next.username)) {
+    $("profile-username").setCustomValidity(
+      "Use 3–24 characters: letters, numbers, underscores, or hyphens.",
+    );
+    $("profile-username").reportValidity();
+    return;
+  }
+  $("profile-username").setCustomValidity("");
+  if (cloudUser && !next.username) {
+    $("profile-save-status").textContent =
+      "Choose a username before saving your account profile.";
+    $("profile-save-status").dataset.state = "error";
+    return;
+  }
+  if (cloudUser && !next.email) {
+    $("profile-save-status").textContent =
+      "Email is required for account recovery.";
+    $("profile-save-status").dataset.state = "error";
+    return;
+  }
+  if (!(await syncAccountIdentity_(next))) return;
   try {
     window.forgeStorage.setItem(PROFILE_KEY, JSON.stringify(next));
     profile = next;
@@ -7309,8 +7364,9 @@ function renderGoals() {
     );
     const remove = element("button", "btn secondary", "Delete");
     remove.type = "button";
-    remove.addEventListener("click", () => {
-      if (confirm(`Delete “${goal.name}”?`)) deleteGoal(goal.id);
+    remove.addEventListener("click", async () => {
+      if (await ForgeDialogs.confirm(`Delete “${goal.name}”?`, { danger: true }))
+        deleteGoal(goal.id);
     });
     actions.append(edit, archive, remove);
     card.append(heading, values, bar, milestones, meta, actions);
@@ -7460,7 +7516,10 @@ setWorkoutState("not-started");
 syncPrimaryRouteFromHash(true);
 
 $("export-forge").addEventListener("click", () => {
-  const data = cloudSnapshot_();
+  const data = {
+    ...cloudSnapshot_(),
+    exportedAt: new Date().toISOString(),
+  };
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: "application/json",
   });
@@ -7474,6 +7533,39 @@ $("export-forge").addEventListener("click", () => {
 $("export-forge-settings").addEventListener("click", () =>
   $("export-forge").click(),
 );
+$("import-forge-settings").addEventListener("click", () =>
+  $("import-forge-file").click(),
+);
+$("import-forge-file").addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text());
+    const validation = ForgeCloudState.validateExport(imported);
+    if (!validation.valid) {
+      await ForgeDialogs.alert(validation.reason, { title: "Import failed" });
+      return;
+    }
+    if (
+      !(await ForgeDialogs.confirm(
+        "Importing will replace this browser's Forge data. A backup will be created first. Continue?",
+      ))
+    )
+      return;
+    backupLocalStateBeforeReplace_();
+    cloudSetLocal_(imported);
+    renderAfterCloud_();
+    if (cloudUser) {
+      cloudDirty = true;
+      queueCloudSave();
+    }
+    notify("Forge data imported.");
+  } catch (error) {
+    console.error("Unable to import Forge data:", error);
+    await ForgeDialogs.alert("That file could not be imported.", { title: "Import failed" });
+  }
+});
 
 let chartResizeTimer;
 window.addEventListener("resize", () => {
@@ -7485,6 +7577,7 @@ window.addEventListener("resize", () => {
 });
 
 const CLOUD_PENDING_KEY = "forge-supabase-pending";
+const CLOUD_BACKUP_KEY = "forge-supabase-last-backup";
 const CLOUD_LAST_USER_KEY = "forge-supabase-last-user";
 const CLOUD_SYNC_KEYS = new Set([
   STORAGE_KEY,
@@ -7499,6 +7592,32 @@ const CLOUD_SYNC_KEYS = new Set([
   "forge-favorite-exercises",
   "forge-recent-exercises",
 ]);
+const CLOUD_STATE_KEYS = Object.freeze({
+  workouts: STORAGE_KEY,
+  restDays: REST_KEY,
+  profile: PROFILE_KEY,
+  settings: SETTINGS_KEY,
+  goals: GOALS_KEY,
+  prHistory: PR_HISTORY_KEY,
+  workoutTemplates: WORKOUT_TEMPLATES_KEY,
+  sectionTemplates: SECTION_TEMPLATES_KEY,
+  workoutDraft: WORKOUT_DRAFT_KEY,
+  favoriteExerciseIds: "forge-favorite-exercises",
+  recentExerciseIds: "forge-recent-exercises",
+});
+function beginAccountBootstrap_(message = "Loading Forge…") {
+  document.documentElement.dataset.accountBootstrap = "true";
+  const status = $("auth-bootstrap");
+  if (status) {
+    status.hidden = false;
+    status.textContent = message;
+  }
+}
+function finishAccountBootstrap_() {
+  document.documentElement.removeAttribute("data-account-bootstrap");
+  const status = $("auth-bootstrap");
+  if (status) status.hidden = true;
+}
 let cloudReady = false;
 let cloudSaving = false;
 let cloudDirty = false;
@@ -7508,99 +7627,32 @@ let cloudUser = null;
 let cloudSaveTimer = null;
 let cloudApplying = false;
 
-function cloudJson_(key, fallback) {
-  try {
-    const value = JSON.parse(window.forgeStorage.getItem(key) || "null");
-    return value ?? fallback;
-  } catch (_) {
-    return fallback;
-  }
-}
+window.addEventListener("offline", () => {
+  if (cloudDirty) cloudNotice_("Pending sync — offline");
+});
+window.addEventListener("online", () => {
+  if (!cloudUser) return;
+  cloudNotice_("Connection restored — syncing…");
+  if (cloudReady) flushCloudSave_();
+  else void connectCloudUser_(cloudUser);
+});
+
 function cloudSnapshot_() {
-  return {
-    schemaVersion: 1,
-    workouts: cloudJson_(STORAGE_KEY, []),
-    restDays: cloudJson_(REST_KEY, []),
-    profile: cloudJson_(PROFILE_KEY, {}),
-    settings: cloudJson_(SETTINGS_KEY, DEFAULT_SETTINGS),
-    goals: cloudJson_(GOALS_KEY, []),
-    prHistory: cloudJson_(PR_HISTORY_KEY, []),
-    workoutTemplates: cloudJson_(WORKOUT_TEMPLATES_KEY, []),
-    sectionTemplates: cloudJson_(SECTION_TEMPLATES_KEY, []),
-    workoutDraft: cloudJson_(WORKOUT_DRAFT_KEY, null),
-    favoriteExerciseIds: cloudJson_("forge-favorite-exercises", []),
-    recentExerciseIds: cloudJson_("forge-recent-exercises", []),
-  };
+  return ForgeCloudState.snapshot({
+    storage: window.forgeStorage,
+    keys: CLOUD_STATE_KEYS,
+    defaults: DEFAULT_SETTINGS,
+  });
 }
 function cloudSetLocal_(remote) {
   cloudApplying = true;
   try {
-    window.forgeStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(Array.isArray(remote.workouts) ? remote.workouts : []),
-    );
-    window.forgeStorage.setItem(
-      REST_KEY,
-      JSON.stringify(Array.isArray(remote.restDays) ? remote.restDays : []),
-    );
-    window.forgeStorage.setItem(
-      PROFILE_KEY,
-      JSON.stringify(
-        remote.profile && typeof remote.profile === "object"
-          ? remote.profile
-          : {},
-      ),
-    );
-    window.forgeStorage.setItem(
-      SETTINGS_KEY,
-      JSON.stringify(
-        remote.settings && typeof remote.settings === "object"
-          ? remote.settings
-          : DEFAULT_SETTINGS,
-      ),
-    );
-    window.forgeStorage.setItem(
-      GOALS_KEY,
-      JSON.stringify(Array.isArray(remote.goals) ? remote.goals : []),
-    );
-    window.forgeStorage.setItem(
-      PR_HISTORY_KEY,
-      JSON.stringify(Array.isArray(remote.prHistory) ? remote.prHistory : []),
-    );
-    window.forgeStorage.setItem(
-      WORKOUT_TEMPLATES_KEY,
-      JSON.stringify(
-        Array.isArray(remote.workoutTemplates) ? remote.workoutTemplates : [],
-      ),
-    );
-    window.forgeStorage.setItem(
-      SECTION_TEMPLATES_KEY,
-      JSON.stringify(
-        Array.isArray(remote.sectionTemplates) ? remote.sectionTemplates : [],
-      ),
-    );
-    window.forgeStorage.setItem(
-      "forge-favorite-exercises",
-      JSON.stringify(
-        Array.isArray(remote.favoriteExerciseIds)
-          ? remote.favoriteExerciseIds
-          : [],
-      ),
-    );
-    window.forgeStorage.setItem(
-      "forge-recent-exercises",
-      JSON.stringify(
-        Array.isArray(remote.recentExerciseIds) ? remote.recentExerciseIds : [],
-      ),
-    );
-    if (remote.workoutDraft && typeof remote.workoutDraft === "object") {
-      window.forgeStorage.setItem(
-        WORKOUT_DRAFT_KEY,
-        JSON.stringify(remote.workoutDraft),
-      );
-    } else {
-      window.forgeStorage.removeItem(WORKOUT_DRAFT_KEY);
-    }
+    ForgeCloudState.apply({
+      storage: window.forgeStorage,
+      keys: CLOUD_STATE_KEYS,
+      defaults: DEFAULT_SETTINGS,
+      remote: remote || {},
+    });
   } finally {
     cloudApplying = false;
   }
@@ -7609,55 +7661,64 @@ function cloudNotice_(message) {
   const status = $("cloud-status");
   if (status) status.textContent = message;
 }
+function backupLocalStateBeforeReplace_() {
+  try {
+    window.forgeStorage.setItem(
+      CLOUD_BACKUP_KEY,
+      JSON.stringify({ savedAt: new Date().toISOString(), data: cloudSnapshot_() }),
+    );
+  } catch (error) {
+    console.error("Unable to create sync backup:", error);
+  }
+}
 function queueCloudSave() {
   cloudDirty = true;
   try {
     window.forgeStorage.setItem(CLOUD_PENDING_KEY, "1");
   } catch (_) {}
+  cloudNotice_(cloudReady ? "Pending sync" : "Saved on this device — pending sync");
   clearTimeout(cloudSaveTimer);
   cloudSaveTimer = setTimeout(flushCloudSave_, 350);
 }
 async function flushCloudSave_() {
-  if (!cloudReady || cloudSaving || !cloudDirty) return;
+  if (cloudSaving || !cloudDirty) return;
+  if (!cloudReady || !cloudClient) {
+    if (cloudUser) cloudNotice_("Pending sync — waiting for connection");
+    return;
+  }
   cloudDirty = false;
   cloudSaving = true;
   cloudNotice_("Saving to Supabase…");
-  const { data, error } = await cloudClient.rpc("save_forge_state", {
-    expected_version: cloudVersion,
-    new_data: cloudSnapshot_(),
-  });
-  cloudSaving = false;
-  if (error) {
-    if (/VERSION_CONFLICT|40001/.test(`${error.message} ${error.code}`)) {
-      await resolveCloudConflict_();
-      return;
+  try {
+    const { data, error } = await cloudClient.rpc("save_forge_state", {
+      expected_version: cloudVersion,
+      new_data: cloudSnapshot_(),
+    });
+    if (error) {
+      if (isVersionConflict(error)) {
+        cloudSaving = false;
+        await resolveCloudConflict_();
+        return;
+      }
+      throw error;
     }
-    cloudDirty = true;
-    cloudNotice_("Not synced — click for details");
-    console.error("Supabase save failed:", error);
-    return;
-  }
-  cloudVersion = Number(data) || cloudVersion + 1;
-  if (cloudDirty) flushCloudSave_();
-  else {
-    try {
+    cloudVersion = Number(data) || cloudVersion + 1;
+    if (cloudDirty) flushCloudSave_();
+    else {
       window.forgeStorage.removeItem(CLOUD_PENDING_KEY);
-    } catch (_) {}
-    cloudNotice_("Saved to Supabase");
+      cloudNotice_("Saved to Supabase");
+    }
+  } catch (error) {
+    cloudDirty = true;
+    window.forgeStorage.setItem(CLOUD_PENDING_KEY, "1");
+    cloudNotice_("Pending sync — retrying when online");
+    console.error("Supabase save failed:", error);
+  } finally {
+    cloudSaving = false;
   }
 }
 function cloudHasData_(state) {
-  return Boolean(
-    state.workouts?.length ||
-    state.restDays?.length ||
-    state.goals?.length ||
-    state.workoutTemplates?.length ||
-    state.sectionTemplates?.length ||
-    state.workoutDraft ||
-    state.favoriteExerciseIds?.length ||
-    state.recentExerciseIds?.length ||
-    (state.profile && Object.values(state.profile).some(Boolean)),
-  );
+  return ForgeCloudState.hasData(state);
 }
 async function fetchCloudRow_() {
   const { data, error } = await cloudClient
@@ -7678,11 +7739,12 @@ async function resolveCloudConflict_() {
       return;
     }
     if (
-      confirm(
+      await ForgeDialogs.confirm(
         "Forge was changed on another device. Load that newer copy? Select Cancel to keep this browser's copy.",
       )
     ) {
       cloudVersion = Number(row.version) || 0;
+      backupLocalStateBeforeReplace_();
       cloudSetLocal_(row.data || {});
       window.forgeStorage.removeItem(CLOUD_PENDING_KEY);
       renderAfterCloud_();
@@ -7700,71 +7762,88 @@ async function resolveCloudConflict_() {
 }
 async function connectCloudUser_(user) {
   if (!user || (cloudUser?.id === user.id && cloudReady)) return;
+  const lastUser = window.forgeStorage.getGlobalItem(CLOUD_LAST_USER_KEY);
+  const anonymousState = cloudSnapshot_();
   cloudUser = user;
   cloudReady = false;
   cloudNotice_("Loading Supabase…");
   try {
+    await window.forgeStorage.setNamespace(`user:${user.id}`);
     const row = await fetchCloudRow_();
     const localState = cloudSnapshot_();
     const localPending = window.forgeStorage.getItem(CLOUD_PENDING_KEY) === "1";
-    const lastUser = window.forgeStorage.getItem(CLOUD_LAST_USER_KEY);
     cloudVersion = Number(row?.version) || 0;
     cloudReady = true;
-    window.forgeStorage.setItem(CLOUD_LAST_USER_KEY, user.id);
 
     if (!row) {
+      const anonymousHasData = cloudHasData_(anonymousState);
+      const accountHasData = cloudHasData_(localState);
       if (
-        cloudHasData_(localState) &&
-        lastUser &&
-        lastUser !== user.id &&
-        !confirm(
-          "This account has no Forge cloud data. Upload the data currently in this browser to this account?",
-        )
+        (anonymousHasData || accountHasData) &&
+        !(await ForgeDialogs.confirm(
+          anonymousHasData
+            ? "This account has no Forge cloud data. Upload the anonymous browser data to this account? Select Cancel to keep it separate."
+            : "This account has no Forge cloud data. Upload the data currently in this account's browser namespace?",
+        ))
       ) {
-        cloudReady = false;
-        cloudNotice_("Browser-only data — click to sign out");
+        cloudSetLocal_({});
+        renderAfterCloud_();
+        window.forgeStorage.setGlobalItem(CLOUD_LAST_USER_KEY, user.id);
+        cloudNotice_("Signed in — anonymous data remains separate");
         return;
       }
+      if (anonymousHasData && !accountHasData) cloudSetLocal_(anonymousState);
       cloudDirty = true;
       await flushCloudSave_();
+      renderAfterCloud_();
+      window.forgeStorage.setGlobalItem(CLOUD_LAST_USER_KEY, user.id);
       return;
     }
 
-    if (localPending && cloudHasData_(localState)) {
+    const hasDifferentLocalData =
+      cloudHasData_(localState) && lastUser !== user.id;
+    if ((localPending || hasDifferentLocalData) && cloudHasData_(localState)) {
       if (
-        confirm(
-          "This browser has unsynced Forge changes. Upload them to Supabase?",
+        await ForgeDialogs.confirm(
+          hasDifferentLocalData
+            ? "This browser has Forge data that is not from this account. Upload it to Supabase? Select Cancel to load this account's cloud data."
+            : "This browser has unsynced Forge changes. Upload them to Supabase?",
         )
       ) {
         cloudDirty = true;
         await flushCloudSave_();
       } else {
+        backupLocalStateBeforeReplace_();
         cloudSetLocal_(row.data || {});
         window.forgeStorage.removeItem(CLOUD_PENDING_KEY);
         renderAfterCloud_();
         cloudNotice_("Loaded from Supabase");
       }
     } else {
+      backupLocalStateBeforeReplace_();
       cloudSetLocal_(row.data || {});
       renderAfterCloud_();
       cloudNotice_("Saved to Supabase");
     }
+    window.forgeStorage.setGlobalItem(CLOUD_LAST_USER_KEY, user.id);
   } catch (error) {
     cloudReady = false;
     cloudNotice_("Supabase unavailable — local mode");
     console.error("Supabase load failed:", error);
+  } finally {
+    finishAccountBootstrap_();
   }
 }
 async function cloudAccountAction_() {
   if (!cloudClient) {
-    alert(
+    await ForgeDialogs.alert(
       "Add your Supabase project URL and publishable key to js/supabase-config.js, then reload Forge.",
     );
     return;
   }
   if (cloudUser) {
     if (
-      confirm(
+      await ForgeDialogs.confirm(
         `Sign out of Forge cloud sync for ${cloudUser.email || "this account"}?`,
       )
     ) {
@@ -7775,8 +7854,8 @@ async function cloudAccountAction_() {
     }
     return;
   }
-  const email = prompt(
-    "Enter your email to receive a Forge sign-in link:",
+  const email = (
+    await ForgeDialogs.prompt("Enter your email to receive a Forge sign-in link:")
   )?.trim();
   if (!email) return;
   const redirectTo = location.href.split("#")[0].split("?")[0];
@@ -7786,10 +7865,119 @@ async function cloudAccountAction_() {
   });
   if (error) {
     cloudNotice_("Sign-in failed — click to retry");
-    alert(error.message);
+    await ForgeDialogs.alert(error.message, { title: "Sign-in failed" });
   } else {
     cloudNotice_("Check your email for the sign-in link");
   }
+}
+function accountPasswordStatus_(message, state = "") {
+  const status = $("account-password-status");
+  if (!status) return;
+  status.textContent = message;
+  status.dataset.state = state;
+}
+function authFunctionError_(errorCode) {
+  return {
+    INVALID_CREDENTIALS: "Username or password is incorrect.",
+    USERNAME_TAKEN: "That username is already taken.",
+    INVALID_ACCOUNT_DETAILS: "Use a valid email, username, and password of at least 8 characters.",
+    ACCOUNT_NOT_CREATED: "The account could not be created.",
+    RECOVERY_UNAVAILABLE: "The recovery email could not be sent.",
+    AUTH_SERVICE_NOT_CONFIGURED: "Username authentication is not configured yet.",
+  }[errorCode] || "Authentication is temporarily unavailable.";
+}
+async function invokeForgeAuth_(body) {
+  if (!cloudClient) {
+    accountPasswordStatus_("Configure Supabase before using username authentication.", "error");
+    return null;
+  }
+  const { data, error } = await cloudClient.functions.invoke("forge-auth", { body });
+  if (error) {
+    console.error("Forge auth request failed:", error);
+    accountPasswordStatus_("Authentication service unavailable.", "error");
+    return null;
+  }
+  if (data?.error) {
+    accountPasswordStatus_(authFunctionError_(data.error), "error");
+    return null;
+  }
+  return data;
+}
+async function signInWithUsername_() {
+  const username = normalizeUsername($("account-login-username").value);
+  const password = $("account-login-password").value;
+  if (!isValidUsername(username) || password.length < 8) {
+    accountPasswordStatus_("Enter a valid username and password of at least 8 characters.", "error");
+    return;
+  }
+  accountPasswordStatus_("Signing in…");
+  const data = await invokeForgeAuth_({ action: "sign_in", username, password });
+  if (!data?.session) return;
+  const { error } = await cloudClient.auth.setSession(data.session);
+  if (error) {
+    accountPasswordStatus_("The sign-in session could not be started.", "error");
+    return;
+  }
+  $("account-login-password").value = "";
+  accountPasswordStatus_("Signed in.", "saved");
+}
+async function createUsernameAccount_() {
+  const username = normalizeUsername($("account-login-username").value);
+  const email = $("account-recovery-email").value.trim().toLowerCase();
+  const password = $("account-login-password").value;
+  if (!isValidUsername(username) || password.length < 8 || !email.includes("@")) {
+    accountPasswordStatus_("Enter a valid email, username, and password of at least 8 characters.", "error");
+    return;
+  }
+  accountPasswordStatus_("Creating account…");
+  const data = await invokeForgeAuth_({ action: "sign_up", username, email, password });
+  if (!data) return;
+  $("account-login-password").value = "";
+  accountPasswordStatus_("Account created. Check your email to confirm it, then sign in.", "saved");
+}
+async function sendPasswordRecovery_() {
+  const email = $("account-recovery-email").value.trim().toLowerCase();
+  if (!email.includes("@")) {
+    accountPasswordStatus_("Enter the recovery email for this account.", "error");
+    return;
+  }
+  accountPasswordStatus_("Sending recovery email…");
+  const data = await invokeForgeAuth_({
+    action: "recover",
+    email,
+    redirectTo: location.href.split("#")[0].split("?")[0],
+  });
+  if (data?.sent) accountPasswordStatus_("Check your email for recovery instructions.", "saved");
+}
+async function deleteAccount_() {
+  if (!cloudUser || !cloudClient) {
+    await ForgeDialogs.alert("Sign in before deleting an account.");
+    return;
+  }
+  if (
+    !(await ForgeDialogs.confirm(
+      "Permanently delete this account, all cloud data, and this account's local browser data? This cannot be undone.",
+      { acceptLabel: "Delete permanently", danger: true },
+    ))
+  )
+    return;
+  const typed = await ForgeDialogs.prompt(
+    `Type DELETE to confirm deleting ${cloudUser.email || "this account"}.`,
+    "",
+    { inputLabel: "Type DELETE" },
+  );
+  if (typed !== "DELETE") return;
+  accountPasswordStatus_("Deleting account…");
+  const data = await invokeForgeAuth_({ action: "delete_account" });
+  if (!data?.deleted) return;
+  window.forgeStorage.clear();
+  await cloudClient.auth.signOut();
+  await window.forgeStorage.setNamespace("anonymous");
+  cloudUser = null;
+  cloudReady = false;
+  cloudDirty = false;
+  renderAfterCloud_();
+  accountPasswordStatus_("Account deleted.", "saved");
 }
 function observeLocalChanges_() {
   if (window.__forgeSupabaseStorageObserved) return;
@@ -7800,6 +7988,10 @@ function observeLocalChanges_() {
 }
 async function initializeCloud() {
   $("cloud-status").addEventListener("click", cloudAccountAction_);
+  $("account-password-sign-in").addEventListener("click", signInWithUsername_);
+  $("account-password-sign-up").addEventListener("click", createUsernameAccount_);
+  $("account-password-recover").addEventListener("click", sendPasswordRecovery_);
+  $("delete-account").addEventListener("click", deleteAccount_);
   observeLocalChanges_();
   const settings = window.FORGE_SUPABASE || {};
   const configured =
@@ -7808,6 +8000,7 @@ async function initializeCloud() {
     !settings.publishableKey.startsWith("YOUR_");
   if (!configured || !window.supabase?.createClient) {
     cloudNotice_("Supabase setup required — click here");
+    finishAccountBootstrap_();
     return;
   }
   cloudClient = window.supabase.createClient(
@@ -7823,14 +8016,19 @@ async function initializeCloud() {
   );
   cloudClient.auth.onAuthStateChange((event, session) => {
     if (event === "SIGNED_OUT") {
+      beginAccountBootstrap_("Signing out…");
       cloudUser = null;
       cloudReady = false;
       cloudDirty = false;
       cloudVersion = 0;
       window.forgeStorage.clear();
-      renderAfterCloud_();
-      cloudNotice_("Signed out — click to sign in");
+      void window.forgeStorage.setNamespace("anonymous").then(() => {
+        renderAfterCloud_();
+        cloudNotice_("Signed out — click to sign in");
+        finishAccountBootstrap_();
+      });
     } else if (session?.user && session.user.id !== cloudUser?.id) {
+      beginAccountBootstrap_("Loading your account…");
       setTimeout(() => connectCloudUser_(session.user), 0);
     }
   });
@@ -7841,17 +8039,16 @@ async function initializeCloud() {
   if (error) {
     cloudNotice_("Supabase sign-in unavailable");
     console.error(error);
+    finishAccountBootstrap_();
   } else if (session?.user) {
     await connectCloudUser_(session.user);
   } else {
     cloudNotice_("Sign in to sync — click here");
+    finishAccountBootstrap_();
   }
 }
-function queueCloudSave_() {
-  cloudDirty = true;
-  flushCloudSave_();
-}
 function renderAfterCloud_() {
+  $("delete-account").hidden = !cloudUser;
   loadHistory();
   loadProfile();
   forgeSettings = readForgeSettings();

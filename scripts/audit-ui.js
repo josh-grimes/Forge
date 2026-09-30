@@ -171,6 +171,13 @@ check(
 const scripts = [
   fs.readFileSync(path.join(root, "js", "bootstrap.js"), "utf8"),
   fs.readFileSync(path.join(root, "js", "exercises.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "navigation-state.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "workout-state.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "workout-rules.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "cloud-state.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "account-rules.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "sync-rules.js"), "utf8"),
+  fs.readFileSync(path.join(root, "js", "dialogs.js"), "utf8"),
   app,
 ];
 scripts.forEach((source, index) => {
@@ -181,6 +188,10 @@ scripts.forEach((source, index) => {
     check(`inline script ${index + 1} syntax`, false, error.message);
   }
 });
+check(
+  !/(?<![.\w])(?:alert|confirm|prompt)\s*\(/.test(app),
+  "app uses the mobile-safe Forge dialog service instead of native dialogs",
+);
 
 const images = [...html.matchAll(/<img\b([^>]*)>/gi)];
 const missingAlt = images.filter(

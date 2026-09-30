@@ -1,0 +1,27 @@
+name: Forge Supabase auth integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  auth-integration:
+    if: ${{ vars.FORGE_SUPABASE_TEST_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration
+        env:
+          FORGE_TEST_SUPABASE_URL: ${{ secrets.FORGE_TEST_SUPABASE_URL }}
+          FORGE_TEST_SUPABASE_ANON_KEY: ${{ secrets.FORGE_TEST_SUPABASE_ANON_KEY }}
+          FORGE_TEST_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FORGE_TEST_SUPABASE_SERVICE_ROLE_KEY }}
+          FORGE_TEST_USERNAME: ${{ secrets.FORGE_TEST_USERNAME }}
+          FORGE_TEST_EMAIL: ${{ secrets.FORGE_TEST_EMAIL }}
+          FORGE_TEST_PASSWORD: ${{ secrets.FORGE_TEST_PASSWORD }}

@@ -1,3 +1,4 @@
+document.documentElement.dataset.accountBootstrap = "true";
 try {
   const savedSettings = JSON.parse(
     window.forgeStorage?.getItem("forge-settings") || "{}",
