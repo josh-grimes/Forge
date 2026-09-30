@@ -35,7 +35,16 @@
   function primaryRouteForView(view) {
     if (view === "forge" || view === "builder") return "forge";
     if (view === "goals" || view === "weight") return "progress";
-    return ["home", "library", "calendar", "progress", "profile", "settings"].includes(view) ? view : "home";
+    return [
+      "home",
+      "library",
+      "calendar",
+      "progress",
+      "profile",
+      "settings",
+    ].includes(view)
+      ? view
+      : "home";
   }
 
   return { createNavigationState, primaryRouteForView };

@@ -10,31 +10,64 @@ const styles = fs.readFileSync(path.join(root, "css", "styles.css"), "utf8");
 
 function contrast(foreground, background) {
   const luminance = (hex) => {
-    const channels = hex.match(/[a-f\d]{2}/gi).map((value) => Number.parseInt(value, 16) / 255);
-    const linear = channels.map((value) => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    const channels = hex
+      .match(/[a-f\d]{2}/gi)
+      .map((value) => Number.parseInt(value, 16) / 255);
+    const linear = channels.map((value) =>
+      value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4,
+    );
     return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
   };
-  const [light, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+  const [light, dark] = [luminance(foreground), luminance(background)].sort(
+    (a, b) => b - a,
+  );
   return (light + 0.05) / (dark + 0.05);
 }
 
-for (const asset of ["assets/logos/forge-logo.png", "assets/icons/forge-icon.png", "assets/logos/forge-logo-blue.png", "assets/icons/forge-icon-blue.png"]) {
+for (const asset of [
+  "assets/logos/forge-logo.png",
+  "assets/icons/forge-icon.png",
+  "assets/logos/forge-logo-blue.png",
+  "assets/icons/forge-icon-blue.png",
+]) {
   const bytes = fs.readFileSync(path.join(root, asset));
-  assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10], `${asset} must be a valid PNG asset`);
+  assert.deepEqual(
+    [...bytes.subarray(0, 8)],
+    [137, 80, 78, 71, 13, 10, 26, 10],
+    `${asset} must be a valid PNG asset`,
+  );
 }
 
 assert.match(html, /id="forge-logo"[^>]+src="assets\/logos\/forge-logo\.png"/);
-assert.match(html, /id="forge-favicon"[^>]+href="assets\/icons\/forge-icon\.png"/);
-assert.match(html, /light\s*\?\s*"assets\/logos\/forge-logo-blue\.png"\s*:\s*"assets\/logos\/forge-logo\.png"/);
-assert.match(html, /light\s*\?\s*"assets\/icons\/forge-icon-blue\.png"\s*:\s*"assets\/icons\/forge-icon\.png"/);
-assert.match(html, /function resolvedForgeTheme\(\)[\s\S]*?prefers-color-scheme: light/);
-assert.match(html, /function applyForgeTheme\(\)[\s\S]*?updateForgeBranding\(\)/);
+assert.match(
+  html,
+  /id="forge-favicon"[^>]+href="assets\/icons\/forge-icon\.png"/,
+);
+assert.match(
+  html,
+  /light\s*\?\s*"assets\/logos\/forge-logo-blue\.png"\s*:\s*"assets\/logos\/forge-logo\.png"/,
+);
+assert.match(
+  html,
+  /light\s*\?\s*"assets\/icons\/forge-icon-blue\.png"\s*:\s*"assets\/icons\/forge-icon\.png"/,
+);
+assert.match(
+  html,
+  /function resolvedForgeTheme\(\)[\s\S]*?prefers-color-scheme: light/,
+);
+assert.match(
+  html,
+  /function applyForgeTheme\(\)[\s\S]*?updateForgeBranding\(\)/,
+);
 
 assert.doesNotMatch(html, />New Workout</);
 assert.doesNotMatch(html, />NEW WORKOUT</);
 assert.match(html, /id="new-workout-heading">Forge Workout</);
 assert.match(html, /<p class="eyebrow">FORGE WORKOUT<\/p>/);
-assert.match(html, /\$\("new-workout-heading"\)\.textContent = "Forge Workout"/);
+assert.match(
+  html,
+  /\$\("new-workout-heading"\)\.textContent = "Forge Workout"/,
+);
 
 for (const control of [
   /id="builder-details-continue"[^>]+class="btn primary/,
@@ -44,18 +77,48 @@ for (const control of [
   /id="builder-review-back"[^>]+class="btn secondary/,
   /id="builder-review-save"[^>]+class="btn primary/,
   /id="start-blank-workout"[^>]+class="btn primary/,
-]) assert.match(html, control);
+])
+  assert.match(html, control);
 
 assert.match(styles, /--color-surface-overlay:\s*#18181df2/);
-assert.match(styles, /:root\[data-theme="light"\][\s\S]*?--color-surface-overlay:\s*#fffffff2/);
-assert.match(styles, /\.editor-open #new-workout-card \.workout-commit-actions[^\{]*\{[^}]*background:\s*var\(--color-surface-overlay\)/);
-assert.match(styles, /\.builder-review-exercise[^\{]*\{[^}]*border-bottom:\s*1px solid var\(--color-divider-subtle\)/);
-assert.match(styles, /\.editor-open #new-workout-card[^\{]*\{[^}]*box-shadow:\s*var\(--shadow-builder\)/);
-assert.doesNotMatch(styles, /\.editor-open #new-workout-card \.workout-commit-actions[^\{]*\{[^}]*background:\s*#18181d/);
+assert.match(
+  styles,
+  /:root\[data-theme="light"\][\s\S]*?--color-surface-overlay:\s*#fffffff2/,
+);
+assert.match(
+  styles,
+  /\.editor-open #new-workout-card \.workout-commit-actions[^\{]*\{[^}]*background:\s*var\(--color-surface-overlay\)/,
+);
+assert.match(
+  styles,
+  /\.builder-review-exercise[^\{]*\{[^}]*border-bottom:\s*1px solid var\(--color-divider-subtle\)/,
+);
+assert.match(
+  styles,
+  /\.editor-open #new-workout-card[^\{]*\{[^}]*box-shadow:\s*var\(--shadow-builder\)/,
+);
+assert.doesNotMatch(
+  styles,
+  /\.editor-open #new-workout-card \.workout-commit-actions[^\{]*\{[^}]*background:\s*#18181d/,
+);
 
-assert.ok(contrast("ffffff", "2563eb") >= 4.5, "light-theme primary buttons must meet normal-text contrast");
-assert.ok(contrast("111111", "f97316") >= 4.5, "dark-theme primary buttons must meet normal-text contrast");
-assert.ok(contrast("475569", "ffffff") >= 4.5, "light-theme secondary builder text must remain readable");
-assert.ok(contrast("9ca3af", "1d1e1f") >= 4.5, "dark-theme secondary builder text must remain readable");
+assert.ok(
+  contrast("ffffff", "2563eb") >= 4.5,
+  "light-theme primary buttons must meet normal-text contrast",
+);
+assert.ok(
+  contrast("111111", "f97316") >= 4.5,
+  "dark-theme primary buttons must meet normal-text contrast",
+);
+assert.ok(
+  contrast("475569", "ffffff") >= 4.5,
+  "light-theme secondary builder text must remain readable",
+);
+assert.ok(
+  contrast("9ca3af", "1d1e1f") >= 4.5,
+  "dark-theme secondary builder text must remain readable",
+);
 
-console.log("Forge builder theme tests: branding, labels, controls, and light-mode surfaces passed");
+console.log(
+  "Forge builder theme tests: branding, labels, controls, and light-mode surfaces passed",
+);
